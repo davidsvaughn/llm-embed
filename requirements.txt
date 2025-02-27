@@ -1,0 +1,19 @@
+torch
+transformers
+datasets
+accelerate
+peft
+sentencepiece
+bitsandbytes
+# json-tricks
+# portalocker
+xgboost==2.1.1
+scikit-learn==1.5.1
+matplotlib
+# flash-attn, --no-build-isolation
+deepspeed==0.15.4
+huggingface_hub[cli]
+tenacity
+wandb
+scikit-optimize==0.10.2
+# umap-learn==0.5.6
