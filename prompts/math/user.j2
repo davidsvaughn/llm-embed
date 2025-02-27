@@ -1,0 +1,16 @@
+I will show you a student response on a grade {{ grade }} math test, and ask you to evaluate it and give it a score.
+The score should be on a scale from {{ min_score }} to {{ max_score }}, with {{ min_score }} being the lowest possible score and {{ max_score }} being the highest possible score.
+
+First, here is the sudent response:
+
+### BEGIN ###
+
+{{ text }}
+
+### END ###
+
+Now you must understand the response, evaluate it, and give it a score.
+Focus on the correctness of the student's reasoning and the accuracy of their calculations, rather than the presentation of their work.
+Valid scores are any integer from {{ min_score }} to {{ max_score }}.
+Respond in JSON format like this: {'score':'0'}, or {'score':'1'}, or {'score':'2'}, etc.
+What should the score be?

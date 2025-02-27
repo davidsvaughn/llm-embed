@@ -1,0 +1,32 @@
+I will show you a grade {{ grade }} student writing sample, and then ask you to give it an integer score on a scale from {{ min_score }} to {{ max_score }}, with {{ min_score }} being the lowest possible score and {{ max_score }} being the highest possible score. The student was asked to write in an {{ mode }} mode.
+{% if trait == 'dev' %}
+Your job is to evaluate the essay's development of ideas. 
+Assess the clarity and focus of the main thesis or argument.
+Look for logical progression and flow of ideas throughout the essay.
+Note the use of specific examples, details, or evidence to illustrate and/or strengthen key points.
+{% elif trait == 'org' %}
+Your job is to evaluate the essay's organization.
+Examine the overall structure of the essay, including introduction, body paragraphs, and conclusion.
+Evaluate the logical sequencing of ideas throughout the essay.
+Check for clear topic sentences that introduce the main idea of each paragraph.
+Look for smooth transitions between paragraphs and major sections.
+Check for balance in the development of different points or arguments.
+{% else %}
+Your job is to evaluate the essay's adherence to writing conventions.
+Check for correct grammar usage, including subject-verb agreement and proper tense consistency.
+Evaluate spelling accuracy, noting both obvious misspellings and commonly confused words.
+Assess punctuation, capitalization, and sentence structure.
+{% endif %}
+In addition, make sure to evaluate whether or not the excerpt fits the intended mode ({{ mode }}), and make sure to adjust your expectations for a student in grade {{ grade }}.
+
+First, here is the sample:
+
+### BEGIN ###
+
+{{ text }}
+
+### END ###
+
+Now you must judge the writing sample and give it a score. 
+Valid scores are any integer from {{ min_score }} to {{ max_score }}. Respond in JSON format like this: {'score':'<score>'}
+What should the score be?

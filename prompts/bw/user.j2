@@ -1,0 +1,13 @@
+I will show you a grade {{ grade }} student writing sample, and then ask you to give it an integer score on a scale from {{ min_score }} to {{ max_score }}, with {{ min_score }} being the lowest possible score and {{ max_score }} being the highest possible score. The student was asked to write in an {{ mode }} mode, and this excerpt is meant to be the {{ section }} section of the essay.
+
+First, here is the sample:
+
+### BEGIN ###
+
+{{ text }}
+
+### END ###
+
+Now you must judge the writing sample and give it a score. Be sure to evaluate whether or not the excerpt fits the intended mode ({{ mode }}) and section ({{ section }}). Also consider the essay's originality and sophistication, both in writing mechanics and also in the ideas presented. Other aspects to consider are the complexity of sentence constructions, command of vocabulary, grammar and spelling errors, and overall quality of the writing. Make sure to adjust your expectations for a student in grade {{ grade }}.
+Valid scores are any integer from {{ min_score }} to {{ max_score }}. Respond in JSON format like this: {'score':'<score>'}
+What should the score be?
