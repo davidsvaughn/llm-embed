@@ -92,6 +92,21 @@ def aggregate_layers(L, **kwargs):
 
 ''' ExLlamaV2 Embedding Extractor '''
 
+'''
+some changes had to be made to: /home/azureuser/llm-embed/exllamav2/exllamav2/model.py#L850
+might need to mokey patch...  only if we want multiple layers of embeddings... last layers already works
+
+        def forward(self,
+        .....
+            if "extract_state_indices" in kwargs:
+                # return result.get("logits"), result["states"]
+                return result.get("logits"), {k: result["states"][k] for k in kwargs["extract_state_indices"] if k in result["states"]}
+            elif "last_state" in result:
+                return result.get("logits"), result["last_state"]
+            else:
+                return result.get("logits")
+'''
+
 class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
 
     def __init__(self, model, tokenizer, cfg, chat_tokenizer, batch_size=16):
