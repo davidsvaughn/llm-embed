@@ -95,11 +95,10 @@ class ScriptArguments:
     padding_side:   Optional[str]   = field(default="left", metadata={"help": "The padding side to use"})       # left | right
     projection_dim: Optional[float] = field(default=0.0, metadata={"help": "The projection dimension to use"})
     hidden_layer:   Optional[int]   = field(default=-1, metadata={"help": "The hidden layer to use"})
-    margin:         Optional[float] = field(default=2.0, metadata={"help": "The margin to use in contrastive loss"})
     use_xgb:        Optional[bool]  = field(default=True, metadata={"help": "Whether to run XGBoost"})
-    bucket_size_multiplier: Optional[int] = field(default=-1, metadata={"help": "The bucket size multiplier to use"})
     similarity_type:Optional[str]   = field(default="euclidean", metadata={"help": "The similarity type to use"})  # cosine | euclidean | angular
     use_diff_norm:  Optional[bool]  = field(default=False, metadata={"help": "use normalized score diffs in loss"})
+    margin:         Optional[float] = field(default=2.0, metadata={"help": "The margin to use in contrastive loss"})
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
     pooling_strategy:Optional[str]  = field(default="mean", metadata={"help": "The pooling strategy to use"})   # mean | last
