@@ -94,7 +94,7 @@ def save_predictions(overwrite=False, debug=False):
 #------------------------------------------------------------------------------
 
 # output_dir contains multiple checkpoint directories
-def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=None, pooling_strategy='mean'):
+def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=None, pooling_mode='mean'):
 
     #------------------------------------------------------------------------------
     # min/max checkpoint numbers
@@ -137,7 +137,7 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
         embedder = EmbedderFactory(model_id=checkpoint_dir)
         
         qwks = run_xgb_on_items(embedder, data_by_item, K=K,
-                                pooling_strategy=pooling_strategy,
+                                pooling_mode=pooling_mode,
                                 random_state=cfg.get('random_state', 42),
                                 )
         
@@ -202,8 +202,8 @@ def run_checkpoints():
 
     for output_dir in output_dirs:
         scan_checkpoints(cfg, output_dir,
-                         pooling_strategy='mean',
-                        #  pooling_strategy='last',
+                         pooling_mode='mean',
+                        #  pooling_mode='lasttoken',
                         K=0,
                          )
         
@@ -247,10 +247,10 @@ def test_st_checkpoint():
     hf_tokenizer = transformer_module.tokenizer
     embedder = HuggingfaceEmbedder(model=hf_model, 
                                    tokenizer=hf_tokenizer, 
-                                   pooling_strategy="mean", 
+                                   pooling_mode="mean", 
                                 #    padding_side="right",
                                    )
-    # TODO: pooling_strategy --> pooling_mode
+    # TODO: pooling_mode --> pooling_mode
     
     #------------------------------------------------------------------------------
     qwks = run_xgb_on_items(embedder, data_by_item)
@@ -281,7 +281,7 @@ def clm2st(clm_model_id,
         This should be a model ID that can be loaded by the Transformer class.
         
     pooling_mode : str, default="mean"
-        The pooling strategy to use for generating sentence embeddings.
+        The pooling mode to use for generating sentence embeddings.
         Options include:
         - "mean": Average all token embeddings
         - "lasttoken": Use only the last token's embedding
@@ -367,16 +367,15 @@ def compare_st_checkpoint():
     # hf_tokenizer = transformer_module.tokenizer
     # embedder = HuggingfaceEmbedder(model=hf_model, 
     #                                tokenizer=hf_tokenizer, 
-    #                                pooling_strategy="mean", 
+    #                                pooling_mode="mean", 
     #                             #    padding_side="right",)
     
-    # TODO: pooling_strategy --> pooling_mode
     
     #------------------------------------------------------------------------------
     
     qwks = run_xgb_on_items(embedder, data_by_item, 
                             padding_side="left",
-                            pooling_strategy="mean")
+                            pooling_mode="mean")
     
     if qwks is not None:
         qwk = qwks.mean()

@@ -140,7 +140,7 @@ class DataCollatorForSiameseNetwork:
 class SiameseCausalLM(nn.Module):
     def __init__(self, model,
                 similarity_type: Literal["cosine", "euclidean"] = "cosine",
-                pooling_strategy: Literal["mean", "last"] = "mean",
+                pooling_mode: Literal["mean", "lasttoken"] = "mean",
                 padding_side: Literal["left", "right"] = "left",
                 projection_dim: float = 0.0,
                 lm_loss_weight: float = 0.0,
@@ -151,7 +151,7 @@ class SiameseCausalLM(nn.Module):
         super().__init__()
 
         self.config = model.config
-        self.pooling_strategy = pooling_strategy
+        self.pooling_mode = pooling_mode
         self.padding_side = padding_side
         self.lm_loss_weight = lm_loss_weight
         self.hidden_layer = hidden_layer
@@ -170,7 +170,7 @@ class SiameseCausalLM(nn.Module):
         output, lm_loss = self.embedder.get_embedding(input_ids,
                                                       attention_mask,
                                                       labels=True,
-                                                      pooling_strategy=self.pooling_strategy,
+                                                      pooling_mode=self.pooling_mode,
                                                       padding_side=self.padding_side,
                                                       hidden_layer=self.hidden_layer,
                                                       last_token_offset=last_token_offset,

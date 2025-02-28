@@ -110,7 +110,7 @@ class ScriptArguments:
     margin:         Optional[float] = field(default=2.0, metadata={"help": "The margin to use in contrastive loss"})
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
-    pooling_strategy:Optional[str]  = field(default="mean", metadata={"help": "The pooling strategy to use"})   # mean | last
+    pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     ## *prompt templates are now applied during dataset creation, not here ##
     # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
@@ -466,7 +466,7 @@ model = get_peft_model(model, peft_config)
 model = SiameseCausalLM(
     model, 
     similarity_type=script_args.similarity_type, 
-    pooling_strategy=script_args.pooling_strategy,
+    pooling_mode=script_args.pooling_mode,
     padding_side=script_args.padding_side,
     projection_dim=script_args.projection_dim,
     lm_loss_weight=script_args.lm_loss_weight,
@@ -619,7 +619,7 @@ if script_args.use_xgb:
         test_items, 
         partial(run_xgb,
                 padding_side=script_args.padding_side,
-                pooling_strategy=script_args.pooling_strategy,
+                pooling_mode=script_args.pooling_mode,
                 hidden_layer=script_args.hidden_layer,
         ),
         eval_steps=int(training_args.eval_steps),

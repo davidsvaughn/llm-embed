@@ -31,7 +31,7 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
         self.cfg = cfg
         self.batch_size = batch_size
 
-    def _compute_embedding(self, ids, hidden, position_offsets, mode='last', debug=False):
+    def _compute_embedding(self, ids, hidden, position_offsets, mode='lasttoken', debug=False):
         """
         Compute embedding from hidden state using specified pooling mode.
         
@@ -39,14 +39,14 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
             ids (torch.Tensor): Token IDs tensor of shape (batch_size, seq_len)
             hidden (torch.Tensor): Hidden state tensor of shape (batch_size, seq_len, hidden_dim)
             position_offsets: Position offsets for batched inputs
-            mode: Pooling mode ('last' or 'mean')
+            mode: Pooling mode ('lasttoken' or 'mean')
                 debug: Whether to print debug information
             inputs (list or str): List of strings to embed or a single string.
             
         Returns:
             Tensor containing embeddings
         """
-        if mode == 'last':
+        if mode == 'lasttoken':
             # Last Token Embedding
             return hidden[:, -1, :]
         
@@ -57,7 +57,7 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
 
     def _compute_embeddings(self, 
                            inputs, 
-                           modes=['last', 'mean'],
+                           modes=['lasttoken', 'mean'],
                            return_token=False, 
                            debug=False, 
                            **kwargs):

@@ -14,13 +14,13 @@ from ddp_utils import is_main
 
 def _get_hf_embedding(last_hidden,
                      attention_mask,
-                     pooling_strategy="mean",
+                     pooling_mode="mean",
                      padding_side="left",
                      last_token_offset=0):
     # embedding_mask is attention_mask with the last 4 tokens zeroed out (when score included)
     last_token_index = -1 - last_token_offset
 
-    if pooling_strategy == "last":
+    if pooling_mode == "lasttoken":
         if padding_side == "left":
             output = last_hidden[:, last_token_index]
         elif padding_side == "right":
@@ -31,7 +31,7 @@ def _get_hf_embedding(last_hidden,
         else:
             raise ValueError(f"Padding side '{padding_side}' not recognized.")
             
-    elif pooling_strategy == "mean":
+    elif pooling_mode == "mean":
         embedding_mask = attention_mask.clone()
         if padding_side == "left":
             if last_token_offset>0:
@@ -48,7 +48,7 @@ def _get_hf_embedding(last_hidden,
         output = torch.sum(last_hidden * weights.unsqueeze(-1), dim=1)
         
     else:
-        raise ValueError(f"Pooling strategy '{pooling_strategy}' not recognized.")
+        raise ValueError(f"pooling_mode '{pooling_mode}' not recognized.")
     
     return output.to(dtype=last_hidden.dtype)
 
@@ -57,7 +57,7 @@ def get_hf_embedding(model,
                      input_ids, 
                      attention_mask,
                      labels=None,
-                     pooling_strategy="mean",
+                     pooling_mode="mean",
                      padding_side="left",
                      hidden_layer=-1, 
                      last_token_offset=0,
@@ -87,7 +87,7 @@ def get_hf_embedding(model,
     # Get the last hidden state - default is -1, i.e. the last (top) layer
     last_hidden = outputs.hidden_states[hidden_layer]  # [batch_size, seq_len, hidden_size]
     
-    output = [_get_hf_embedding(last_hidden, attention_mask, ps, padding_side, last_token_offset) for ps in pooling_strategy.split(",")]
+    output = [_get_hf_embedding(last_hidden, attention_mask, ps, padding_side, last_token_offset) for ps in pooling_mode.split(",")]
     output = torch.cat(output, dim=-1)
 
     if labels is None:
