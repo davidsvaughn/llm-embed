@@ -3,7 +3,7 @@ Factory function for creating embedders
 """
 
 import copy
-from util import to_adict
+from utils import to_adict
 from .huggingface import HuggingfaceEmbedder
 from .exllama import ExLlamaV2Embedder
 from .sent_trans import SentenceTransformerEmbedder

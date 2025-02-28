@@ -3,7 +3,7 @@ import re
 import pandas as pd
 from glob import glob
 from tqdm import tqdm
-from util import mkdirs, adict, to_adict, read_jsonl, write_jsonl, pretty_print
+from utils import mkdirs, adict, to_adict, read_jsonl, write_jsonl, pretty_print
 from ddp_utils import printmain, is_main
 from model_utils import PromptBuilder
 

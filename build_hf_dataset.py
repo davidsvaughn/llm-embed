@@ -8,7 +8,7 @@ import json
 from glob import glob
 from datasets import Dataset, DatasetDict
 import random
-from util import to_adict
+from utils import to_adict
 from data_utils import get_config, load_items
 
 

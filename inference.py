@@ -6,7 +6,7 @@ import traceback
 from glob import glob
 from sentence_transformers import SentenceTransformer, models
 
-from util import clear_cuda_tensors, mkdirs, tricky_traversal_order
+from utils import clear_cuda_tensors, mkdirs, tricky_traversal_order
 from ddp_utils import init_distributed, is_main, printmain
 from data_utils import get_config, load_items
 from xgb_utils import run_xgb_on_item, run_xgb_on_items

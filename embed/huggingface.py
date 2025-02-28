@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 from .base import Embedder
-from util import to_adict
+from utils import to_adict
 from model_utils import load_model, tokenize_data_batched
 from ddp_utils import is_main
 

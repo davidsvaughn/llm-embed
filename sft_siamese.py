@@ -37,7 +37,7 @@ from huggingface_hub import HfApi
 from huggingface_hub.utils import RepositoryNotFoundError
 
 from ddp_utils import is_main, main, printmain, get_num_processes
-from util import clear_cuda_tensors, to_adict
+from utils import clear_cuda_tensors, to_adict
 from data_utils import get_config, load_items
 from xgb_utils import run_xgb_on_items
 from kappa import ikappa

@@ -18,7 +18,7 @@ except ImportError:
 
 from .base import Embedder
 from .aggregation import aggregate_layers
-from util import to_adict, fix_repeats
+from utils import to_adict, fix_repeats
 from model_utils import load_chat_tokenizer, apply_chat_template_batched
 
 class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):

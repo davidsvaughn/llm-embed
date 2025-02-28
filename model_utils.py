@@ -9,7 +9,7 @@ from jinja2 import Template
 import hashlib
 from tqdm import tqdm
 from typing import Any, Dict, List, Union
-from util import to_adict
+from utils import to_adict
 from ddp_utils import is_main, printmain
 
 def get_tokenizer_uid(tokenizer):
