@@ -1,22 +1,25 @@
-import os,sys
+import os
+import sys
 import torch
-import os, sys
-from glob import glob
 import time
 import traceback
+from glob import glob
+from sentence_transformers import SentenceTransformer, models
 
 from util import clear_cuda_tensors, mkdirs, tricky_traversal_order
 from ddp_utils import init_distributed, is_main, printmain
 from data_utils import get_config, load_items
 from xgb_utils import run_xgb_on_item, run_xgb_on_items
-
-# from model_utils import load_model
+from model_utils import load_checkpoint_model
+from embed.factory import EmbedderFactory
+from embed.huggingface import HuggingfaceEmbedder
+from embed.sent_trans import SentenceTransformerEmbedder
 
 #---------------------------------------------------------------------------------------
 '''
 For DDP mode - Run this script with the following command:
 
-    torchrun --nproc_per_node 4 ddp_inference.py
+    torchrun --nproc_per_node 4 inference.py
 
 '''
 #---------------------------------------------------------------------------------------    
@@ -205,8 +208,6 @@ def run_checkpoints():
                          )
         
 #------------------------------------------------------------------------------
-from sentence_transformers import SentenceTransformer, models
-from embed_utils import EmbedderFactory, HuggingfaceEmbedder
 
 # output_dir contains multiple checkpoint directories
 def test_st_checkpoint():
@@ -227,7 +228,6 @@ def test_st_checkpoint():
     #------------------------------------------------------------------------------
     # load SentenceTransformer model
     st_root = "/home/azureuser/embed/st/output/"
-    
     
     #------------------------------------------------------------------------------
     # st_run = 'training_math_pairs_279_Salesforce-SFR-Embedding-Mistral_2025-02-13_07-53-43'
@@ -250,11 +250,9 @@ def test_st_checkpoint():
                                    pooling_strategy="mean", 
                                 #    padding_side="right",
                                    )
-    
     # TODO: pooling_strategy --> pooling_mode
     
     #------------------------------------------------------------------------------
-    
     qwks = run_xgb_on_items(embedder, data_by_item)
     
     if qwks is not None:
@@ -264,12 +262,37 @@ def test_st_checkpoint():
     print("Done")
 
 #------------------------------------------------------------------------------
-from embed_utils import SentenceTransformerEmbedder
-from model_utils import load_checkpoint_model
 
+# convert an HF CausalLanguageModel to a SentenceTransformer model
 def clm2st(clm_model_id,
            pooling_mode="mean", # mean, lasttoken
            ):
+    """
+    Converts a causal language model (CLM) into a SentenceTransformer model.
+    
+    This function creates a SentenceTransformer model from a specified causal 
+    language model by combining it with a pooling layer. The resulting model
+    can be used for generating sentence embeddings.
+    
+    Parameters:
+    -----------
+    clm_model_id : str
+        The identifier of the causal language model to be converted.
+        This should be a model ID that can be loaded by the Transformer class.
+        
+    pooling_mode : str, default="mean"
+        The pooling strategy to use for generating sentence embeddings.
+        Options include:
+        - "mean": Average all token embeddings
+        - "lasttoken": Use only the last token's embedding
+    
+    Returns:
+    --------
+    SentenceTransformer
+        A SentenceTransformer model that combines the specified causal language 
+        model with a pooling layer, configured to generate sentence embeddings.
+        The model's tokenizer is configured with pad_token set to eos_token.
+    """
     word_embedding_model = models.Transformer(
         clm_model_id, 
     )
@@ -304,7 +327,6 @@ def compare_st_checkpoint():
     # load test items
     data_by_item = load_items(cfg)
     
-    
     #------------------------------------------------------------------------------
     # python merge_checkpoint.py --checkpoint_dir /home/azureuser/embed/output6/checkpoint-1700
     model_path = '/home/azureuser/embed/output6/model'
@@ -317,7 +339,6 @@ def compare_st_checkpoint():
     # 1 - load as HF model
     embedder = EmbedderFactory(model_id=model_path, model_type='hf')
     
-    
     # 2 - load as SentenceTransformer model
     # hf_model = load_checkpoint_model(model_path)
     
@@ -327,7 +348,6 @@ def compare_st_checkpoint():
     #------------------------------------------------------------------------------
     # load SentenceTransformer model
     # st_root = "/home/azureuser/embed/st/output/"
-    
     
     # #------------------------------------------------------------------------------
     # # st_run = 'training_math_pairs_279_Salesforce-SFR-Embedding-Mistral_2025-02-13_07-53-43'
@@ -379,4 +399,3 @@ if __name__ == "__main__":
     # test_st_checkpoint()
     
     # compare_st_checkpoint()
-    

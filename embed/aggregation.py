@@ -1,5 +1,5 @@
 """
-Embedding layer aggregation utilities
+Embedding layer aggregation utilities : currently only used by Exllama embedding model
 """
 
 import numpy as np

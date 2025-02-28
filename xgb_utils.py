@@ -1,19 +1,35 @@
-import os, sys
 import numpy as np
 import torch
 import numpy as np
-
 import xgboost as xgb
 import time
 from sklearn.model_selection import KFold, cross_val_predict
 from kappa import ikappa
-
-from util import clear_cuda_tensors
-from ddp_utils import is_main, is_main_process
-from embed_utils import compute_hf_embeddings_ddp
+from ddp_utils import is_main
 
 
 def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, random_state=42, **kwargs):
+    """
+    Runs XGBoost regression on embeddings for a specific item with cross-validation or train/valid split.
+    Args:
+        embedder: An embedder object that computes embeddings for the input records.
+        item: The specific item identifier to process.
+        records: Collection of records containing the data to process.
+        preds_file (str, optional): File path to save predictions. Only used with K-fold CV. Defaults to None.
+        K (int, optional): Number of folds for cross-validation. If K=1, uses train/valid split. Defaults to 5.
+        step (int, optional): Training step number for logging purposes. Defaults to None.
+        random_state (int, optional): Random seed for reproducibility. Defaults to 42.
+        **kwargs: Additional keyword arguments passed to embedder.compute_embeddings().
+    Returns:
+        float: Quadratic weighted kappa score (QWK) of the predictions.
+    Notes:
+        - Uses pre-defined best parameters for XGBoost model.
+        - If K>1, performs K-fold cross-validation and can save predictions to file.
+        - If K=1, uses original train/valid split from the records.
+        - Handles distributed training environment with torch.distributed.
+        - Prints timing information and QWK scores for monitoring.
+        - Automatically manages memory by clearing large data structures.
+    """
     
     best_params = {'learning_rate': 0.05, 'n_estimators': 200, 'max_depth': 3, 
                   'min_child_weight': 1, 'subsample': 0.3, 'colsample_bytree': 0.9}
@@ -38,25 +54,6 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
         del emb_data[item]['y']
         del emb_data[item]['idx']
         del emb_data
-        
-        ##############################################
-        ## save embeddings to file
-        # emb_dir = '/home/azureuser/embed/tmp'
-        # emb_dir = '/mnt/llm-train/embed/tmp'
-        # # concat idx, y, x horizontally... X is a 2dim matrix, rest are vectors...
-        # emb_table = np.column_stack((idx, y, X))
-        # # sort table by first column
-        # emb_table = emb_table[emb_table[:,0].argsort()]
-        # # save as numpy npy file
-        # fn = os.path.join(emb_dir, f"hf_emb.npy")
-        # # fn = os.path.join(emb_dir, f"st_emb.npy")
-        # np.save(fn, emb_table)
-        # print(f"Embeddings saved to {fn}")
-        
-        # compute norm of X
-        # X_norm = np.linalg.norm(X, axis=1)
-        
-        ##############################################
         
         # Run XGBoost
         xgb_mod = xgb.XGBRegressor(objective='reg:squarederror', 
@@ -106,8 +103,6 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
         qwk = None
 
     if torch.distributed.is_initialized(): torch.distributed.barrier(device_ids=[torch.cuda.current_device()])  # Wait for rank 0 to finish
-
-    # clear_cuda_tensors()
     
     if is_main():
         if step is not None:
@@ -119,6 +114,19 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
 
 
 def run_xgb_on_items(embedder, data_by_item, **kwargs):
+    """Runs XGBoost model training and evaluation for multiple items in the dataset.
+    Args:
+        embedder: Text embedding model used to convert text to vectors.
+        data_by_item (dict): Dictionary containing data records grouped by item.
+        **kwargs: Additional keyword arguments to pass to run_xgb_on_item function.
+    Returns:
+        numpy.ndarray or None: Array of quadratic weighted kappa scores rounded to 4 decimal places 
+        for each successfully processed item if running in main process, None otherwise.
+    Notes:
+        - Processes items sequentially and collects QWK scores for each item
+        - Prints progress updates when running in main process
+        - Skips items that return None QWK scores
+    """
     qwks = []
     for i, (item, records) in enumerate(data_by_item.items()):
         if is_main():
@@ -127,8 +135,6 @@ def run_xgb_on_items(embedder, data_by_item, **kwargs):
         qwk = run_xgb_on_item(embedder, item, records, **kwargs)
         if qwk is not None:
             qwks.append(qwk)
-            
-    # if torch.distributed.is_initialized(): torch.distributed.barrier()
 
     if is_main():
         return np.array(qwks).round(4)
