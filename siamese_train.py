@@ -66,7 +66,8 @@ class ScriptArguments:
     # model_id:       str             = field(default="microsoft/Phi-3-mini-128k-instruct", metadata={"help": "The HuggingFace model id"})
     # model_id:       str             = field(default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", metadata={"help": "The HuggingFace model id"})
     
-    dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
+    dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
+    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
     
     prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
     use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
