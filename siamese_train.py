@@ -79,8 +79,7 @@ class ScriptArguments:
     # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
     
     prompt_dir:     Optional[str]   = field(default="prompts", metadata={"help": "The prompt directory"})
-    # data_dir:       Optional[str]   = field(default='~/data', metadata={"help": "The directory to store the training data"})
-    test_data_dir:  Optional[str]   = field(default='~/embed/data', metadata={"help": "The directory where the test data is stored"})
+    data_dir:       Optional[str]   = field(default='~/embed/data', metadata={"help": "The directory where the test data is stored"})
     rand_seed:      Optional[int]   = field(default=1357, metadata={"help": "The random seed to use"})
     max_seq_length: Optional[int]   = field(default=2048, metadata={"help": "The maximum sequence length"})
     subsample_train:Optional[float] = field(default=1000000, metadata={"help": "The number of training samples to use"})
@@ -111,6 +110,9 @@ class ScriptArguments:
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
     pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
+    
+    # debugging
+    debug:          Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
     
     ## *prompt templates are now applied during dataset creation, not here ##
     # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
@@ -194,29 +196,30 @@ if 'bw' in script_args.dataset_id[0]:
 if 'fw' in script_args.dataset_id[0]:
     test_items['fw'] = fw_items
 
-# Debug configurations
-DEBUG = 3
 
-if DEBUG:
+#---------------------------------------------------------------------------------------
+# Debugging and logging setup
+
+if script_args.debug:
     training_args.logging_steps = 10
     
-    if DEBUG == 1:
+    if script_args.debug == 1:
         script_args.subsample_eval = 5000
         training_args.eval_steps = 100
         training_args.save_steps = training_args.eval_steps
-    elif DEBUG == 2:
+    elif script_args.debug == 2:
         training_args.gradient_accumulation_steps = 2
         script_args.max_samples = 10000
         script_args.subsample_eval = 1000
         training_args.eval_steps = 50
         training_args.save_steps = training_args.eval_steps
-    elif DEBUG == 3:
+    elif script_args.debug == 3:
         training_args.gradient_accumulation_steps = 2
         script_args.max_samples = 5000
         script_args.subsample_train = 10000
         script_args.subsample_eval = 500
         test_items = {'math': [123362]}
-    elif DEBUG == 4:
+    elif script_args.debug == 4:
         training_args.gradient_accumulation_steps = 2
         script_args.max_samples = 5000
         script_args.subsample_train = 500
@@ -624,7 +627,7 @@ if script_args.use_xgb:
         ),
         eval_steps=int(training_args.eval_steps),
         prompt_dir=script_args.prompt_dir,
-        data_dir=script_args.test_data_dir,
+        data_dir=script_args.data_dir,
     )
 
 #--------------------------------------------------------------------------------------------------
