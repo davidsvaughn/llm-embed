@@ -42,7 +42,7 @@ from data_utils import get_config, load_items
 from xgb_utils import run_xgb_on_items
 from kappa import ikappa
 from model_utils import apply_chat_template
-from embed.huggingface import HuggingfaceEmbedder
+from embedder.huggingface import HuggingfaceEmbedder
 
 #--------------------------------------------------------------------------------------------------
 # 2. Argument Parsing

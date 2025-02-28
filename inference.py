@@ -11,9 +11,9 @@ from ddp_utils import init_distributed, is_main, printmain
 from data_utils import get_config, load_items
 from xgb_utils import run_xgb_on_item, run_xgb_on_items
 from model_utils import load_checkpoint_model
-from embed.factory import EmbedderFactory
-from embed.huggingface import HuggingfaceEmbedder
-from embed.sent_trans import SentenceTransformerEmbedder
+from embedder.factory import EmbedderFactory
+from embedder.huggingface import HuggingfaceEmbedder
+from embedder.sent_trans import SentenceTransformerEmbedder
 
 #---------------------------------------------------------------------------------------
 '''
