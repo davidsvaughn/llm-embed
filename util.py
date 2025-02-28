@@ -1,21 +1,15 @@
 import sys, os
 import time
 import json
-import gzip
-import re
-import json_tricks
-import portalocker
 import traceback
-from jinja2 import Template
-from transformers import AutoTokenizer
 import gc
 import itertools
 import torch
 from glob import glob
 import shutil
-
-from ddp_utils import printmain
-
+# import gzip
+# import json_tricks
+# import portalocker
 
 class adict(dict):
     def __init__(self, *av, **kav):
@@ -99,17 +93,17 @@ def write_jsonl(file_path, records):
         for rec in records:
             f.write(json.dumps(rec) + '\n')
 
-def save_gzip_data(dataset, file_path, timeout=5):
-        # Acquire a write lock using portalocker
-        with portalocker.Lock(file_path, 'w', timeout=timeout) as lockfile:
-            with gzip.open(file_path, 'wt', encoding='UTF-8') as zipfile:
-                json_tricks.dump(dataset, zipfile)
+# def save_gzip_data(dataset, file_path, timeout=5):
+#         # Acquire a write lock using portalocker
+#         with portalocker.Lock(file_path, 'w', timeout=timeout) as lockfile:
+#             with gzip.open(file_path, 'wt', encoding='UTF-8') as zipfile:
+#                 json_tricks.dump(dataset, zipfile)
 
-def load_gzip_data(file_path, timeout=30):
-    # Acquire a read lock using portalocker
-    with portalocker.Lock(file_path, 'r', timeout=timeout) as lockfile:
-        with gzip.open(file_path, 'rt', encoding='UTF-8') as zipfile:
-            return json_tricks.load(zipfile)
+# def load_gzip_data(file_path, timeout=30):
+#     # Acquire a read lock using portalocker
+#     with portalocker.Lock(file_path, 'r', timeout=timeout) as lockfile:
+#         with gzip.open(file_path, 'rt', encoding='UTF-8') as zipfile:
+#             return json_tricks.load(zipfile)
 
 def verify(tokenized_batch):
     """

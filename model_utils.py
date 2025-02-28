@@ -2,19 +2,14 @@ import os, sys
 import re
 import copy
 import traceback
-
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from peft import PeftModel, PeftConfig
 import torch
 from jinja2 import Template
-import uuid
 import hashlib
-
-import torch.distributed as dist
 from tqdm import tqdm
 from typing import Any, Dict, List, Union
-
-from util import mkdirs, adict, to_adict
+from util import to_adict
 from ddp_utils import is_main, printmain
 
 def get_tokenizer_uid(tokenizer):

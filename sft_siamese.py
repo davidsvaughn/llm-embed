@@ -14,8 +14,6 @@ import wandb
 import shutil
 from glob import glob
 from jinja2 import Template
-from tqdm import tqdm
-from tqdm.auto import tqdm
 from functools import partial
 from typing import Dict, List, Union, Literal, Optional
 from dataclasses import dataclass, asdict, field

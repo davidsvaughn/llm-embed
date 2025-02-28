@@ -3,14 +3,8 @@ import re
 import pandas as pd
 from glob import glob
 from tqdm import tqdm
-
-# from transformers import AutoTokenizer
-# from peft import PeftModel, PeftConfig
-# import torch.distributed as dist
-# from typing import Any, Dict, List
-
 from util import mkdirs, adict, to_adict, read_jsonl, write_jsonl, pretty_print
-from ddp_utils import printmain, is_main, is_main_process
+from ddp_utils import printmain, is_main
 from model_utils import PromptBuilder
 
 #-------------------------------------------------------------------------------------

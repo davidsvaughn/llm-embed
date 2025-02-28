@@ -141,11 +141,3 @@ def main(func=None, *, debug=False):
 @main
 def printmain(s):
     print(s)
-
-# if 'LOCAL_RANK' not in os.environ:
-#     print("non-DDP training (single GPU)")
-# else:
-#     printmain("DDP training")
-   
-# if __name__ == "__main__":
-# init_distributed()  
