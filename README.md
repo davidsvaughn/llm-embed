@@ -12,12 +12,6 @@ pip install flash-attn --no-build-isolation
 # pip install -e .
 ```
 
-HF login
-```
-huggingface-cli login --token $HUG_READ_TOKEN
-huggingface-cli login --token $HUG_WRITE_TOKEN
-```
-
 exllamav2
 ```
 git clone https://github.com/turboderp/exllamav2
@@ -36,11 +30,22 @@ pre-commit install
 cd ..
 ```
 
+HF login
+```
+huggingface-cli login --token $HUG_READ_TOKEN
+huggingface-cli login --token $HUG_WRITE_TOKEN
+```
 
+wandb login
 ```
 wandb login --cloud
+```
 
+fine-tune embedding model
+```
+# single GPU
 python siamese_train.py
-torchrun --nproc_per_node 4 siamese_train.py
 
+# multi-GPU
+torchrun --nproc_per_node 4 siamese_train.py
 ```
