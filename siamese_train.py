@@ -87,10 +87,6 @@ class ScriptArguments:
     subsample_eval: Optional[float] = field(default=20000, metadata={"help": "The number of evaluation samples to use"})
     max_samples:    Optional[int]   = field(default=1000000, metadata={"help": "The maximum number of samples to load"})
     
-    ## *prompt templates are now applied during dataset creation, not here ##
-    # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
-    # use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
-    
     # LoRA parameters
     lora_alpha:     Optional[int]   = field(default=32, metadata={"help": "The LoRA alpha parameter"})
     lora_r:         Optional[int]   = field(default=32, metadata={"help": "The LoRA r parameter"})
@@ -115,6 +111,10 @@ class ScriptArguments:
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
     pooling_strategy:Optional[str]  = field(default="mean", metadata={"help": "The pooling strategy to use"})   # mean | last
+    
+    ## *prompt templates are now applied during dataset creation, not here ##
+    # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
+    # use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
 
 # Setup default training arguments
 training_args = TrainingArguments(
