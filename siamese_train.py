@@ -41,6 +41,7 @@ from xgb_utils import run_xgb_on_items
 from kappa import ikappa
 from model_utils import apply_chat_template
 from embedder.huggingface import HuggingfaceEmbedder
+from pathlib import Path
 
 # Import Siamese model components
 from siamese_model import (
@@ -55,8 +56,16 @@ from siamese_model import (
 # - can be run with no cmd line arguments, or with any of the following
 # - all arguments are logged to wandb
 
-cur_dir = os.path.dirname(os.path.abspath(__file__))
+# Standard approach (already used)
+# cur_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Alternative using pathlib (more modern, object-oriented)
+# cur_dir = Path(__file__).parent.absolute()
+
+# If you want the absolute path as string
+cur_dir = str(Path(__file__).parent.absolute())
 deepspeed_dir = os.path.join(cur_dir, 'deepspeed')
+
 
 @dataclass
 class ScriptArguments:
@@ -69,14 +78,18 @@ class ScriptArguments:
     dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
     # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
     
-    prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
-    use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
-    data_dir:       Optional[str]   = field(default='~/data', metadata={"help": "The directory to store the data"})
+    prompt_dir:     Optional[str]   = field(default="prompts", metadata={"help": "The prompt directory"})
+    # data_dir:       Optional[str]   = field(default='~/data', metadata={"help": "The directory to store the training data"})
+    test_data_dir:  Optional[str]   = field(default='~/embed/data', metadata={"help": "The directory where the test data is stored"})
     rand_seed:      Optional[int]   = field(default=1357, metadata={"help": "The random seed to use"})
     max_seq_length: Optional[int]   = field(default=2048, metadata={"help": "The maximum sequence length"})
     subsample_train:Optional[float] = field(default=1000000, metadata={"help": "The number of training samples to use"})
     subsample_eval: Optional[float] = field(default=20000, metadata={"help": "The number of evaluation samples to use"})
     max_samples:    Optional[int]   = field(default=1000000, metadata={"help": "The maximum number of samples to load"})
+    
+    ## *prompt templates are now applied during dataset creation, not here ##
+    # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
+    # use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
     
     # LoRA parameters
     lora_alpha:     Optional[int]   = field(default=32, metadata={"help": "The LoRA alpha parameter"})
@@ -84,11 +97,11 @@ class ScriptArguments:
     lora_dropout:   Optional[float] = field(default=0.1, metadata={"help": "The LoRA dropout rate"})
     
     # Model parameters
-    attn_implementation: Optional[str] = field(default="flash_attention_2", metadata={"help": "The attention implementation to use"})
-    use_4bit:       Optional[bool]  = field(default=False, metadata={"help": "Whether to use 4-bit quantization"})
-    use_double_quant:Optional[bool] = field(default=False, metadata={"help": "Whether to use double quantization"})
-    shuffle:        Optional[bool]  = field(default=True, metadata={"help": "Whether to shuffle the training data"})
-    deepspeed_template:      Optional[str]   = field(default="zero2_decay_template.j2", metadata={"help": "The deepspeed configuration file"})
+    attn_implementation:Optional[str]   = field(default="flash_attention_2", metadata={"help": "The attention implementation to use"})
+    use_4bit:           Optional[bool]  = field(default=False, metadata={"help": "Whether to use 4-bit quantization"})
+    use_double_quant:   Optional[bool]  = field(default=False, metadata={"help": "Whether to use double quantization"})
+    shuffle:            Optional[bool]  = field(default=True, metadata={"help": "Whether to shuffle the training data"})
+    deepspeed_template: Optional[str]   = field(default="zero2_decay_template.j2", metadata={"help": "The deepspeed configuration file"})
     prompt_loss_weight: Optional[float] = field(default=1.0, metadata={"help": "The prompt loss weight"})
 
     # Siamese Network Arguments
@@ -112,7 +125,7 @@ training_args = TrainingArguments(
     remove_unused_columns           = False,
     logging_strategy                = "steps", 
     eval_strategy                   = "steps",
-    output_dir                      = "/home/azureuser/embed/output",
+    output_dir                      = cur_dir+'/output',
     logging_steps                   = 10,
     eval_steps                      = 50,
     save_steps                      = 50,
@@ -144,13 +157,6 @@ def totype(s):
 for k,v in zip(cmd_train_args[::2], cmd_train_args[1::2]):
     setattr(training_args, k.lstrip('-'), totype(v))
 
-# Handle template files    
-for k in ['prompt_template']:
-    if getattr(script_args, k).endswith('.j2'):
-        script_args.use_jinja2 = True
-        with open(cur_dir+'/'+getattr(script_args, k), 'r') as f:
-            setattr(script_args, k, f.read())
-
 # Handle DeepSpeed configuration
 if is_main():
     if 'deepspeed_template' in script_args and script_args.deepspeed_template and training_args.deepspeed:
@@ -161,17 +167,18 @@ if is_main():
         with open(training_args.deepspeed, 'w') as f:
             f.write(ds_config)
 
+# # Handle prompt template files (*prompt templates are now applied during dataset creation, not here)  
+# for k in ['prompt_template']:
+#     if getattr(script_args, k).endswith('.j2'):
+#         script_args.use_jinja2 = True
+#         with open(cur_dir+'/'+getattr(script_args, k), 'r') as f:
+#             setattr(script_args, k, f.read())
+
+# Cast to dataclass
 script_args = ScriptArguments(**vars(script_args))  # Cast namespace to dataclass
 
 #---------------------------------------------------------------------------------------
 # Configuration for evaluation and testing
-
-EVAL_MULT = 1
-USE_SCORE = False
-
-# External validation data
-root_data_dir = '/home/azureuser/embed/data'
-root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
 
 # Test item IDs for different datasets
 math_items = [123362, 29632]
@@ -188,7 +195,7 @@ if 'fw' in script_args.dataset_id[0]:
     test_items['fw'] = fw_items
 
 # Debug configurations
-DEBUG = 0
+DEBUG = 3
 
 if DEBUG:
     training_args.logging_steps = 10
@@ -208,15 +215,13 @@ if DEBUG:
         script_args.max_samples = 5000
         script_args.subsample_train = 10000
         script_args.subsample_eval = 500
-        EVAL_MULT = 1
         test_items = {'math': [123362]}
     elif DEBUG == 4:
         training_args.gradient_accumulation_steps = 2
         script_args.max_samples = 5000
         script_args.subsample_train = 500
         script_args.subsample_eval = 100
-        training_args.eval_steps = 300
-        EVAL_MULT = 1           
+        training_args.eval_steps = 300          
         test_items = {'math': [123362]}
                     
 #---------------------------------------------------------------------------------------
@@ -319,13 +324,13 @@ def prepare_dataset(tokenizer, args):
     
     # Format each sample with the appropriate template
     def format_sample(sample):
-        try:
+        try: # now the prompt templates are applied during dataset creation, not in here
             payload1 = to_adict(json.loads(sample['payload1']))
             payload2 = to_adict(json.loads(sample['payload2']))
             sample["txt1"] = apply_chat_template(tokenizer, payload1)
             sample["txt2"] = apply_chat_template(tokenizer, payload2)
         except:
-            # Fall back to old method
+            # Fall back to old method - when prompt templates were applied here
             sample['txt1'] = format_prompt({**sample, 'text': sample['text1'] }, args.prompt_template, tokenizer)
             sample['txt2'] = format_prompt({**sample, 'text': sample['text2'] }, args.prompt_template, tokenizer)
 
@@ -566,7 +571,7 @@ def run_xgb(model, data, **kwargs):
 
 # XGBoost evaluation callback
 class XGBEvalCallbackDDP(TrainerCallback):
-    def __init__(self, test_items, eval_function, eval_steps=20):
+    def __init__(self, test_items, eval_function, eval_steps=20, prompt_dir='prompts', data_dir='data'):
         self.eval_function = eval_function
         self.eval_steps = eval_steps
         
@@ -577,8 +582,8 @@ class XGBEvalCallbackDDP(TrainerCallback):
             cfg = get_config(
                 item_type, 
                 items=item_list,
-                root_data_dir=root_data_dir,
-                root_prompt_dir=root_prompt_dir,
+                root_data_dir=data_dir,
+                root_prompt_dir=prompt_dir,
             )
             test_data[item_type] = load_items(cfg)
         self.test_data = test_data
@@ -617,7 +622,9 @@ if script_args.use_xgb:
                 pooling_strategy=script_args.pooling_strategy,
                 hidden_layer=script_args.hidden_layer,
         ),
-        eval_steps=int(EVAL_MULT*training_args.eval_steps)
+        eval_steps=int(training_args.eval_steps),
+        prompt_dir=script_args.prompt_dir,
+        data_dir=script_args.test_data_dir,
     )
 
 #--------------------------------------------------------------------------------------------------

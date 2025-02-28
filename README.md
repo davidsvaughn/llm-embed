@@ -29,9 +29,18 @@ cd ..
 
 SentenceTransformers
 ```
-git clone https://github.com/turboderp/exllamav2
-cd exllamav2
-pip install -r requirements.txt
-pip install -e .
+git clone https://github.com/UKPLab/sentence-transformers
+cd sentence-transformers
+python -m pip install -e ".[dev]"
+pre-commit install
 cd ..
+```
+
+
+```
+wandb login --cloud
+
+python siamese_train.py
+torchrun --nproc_per_node 4 siamese_train.py
+
 ```
