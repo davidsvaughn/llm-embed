@@ -9,55 +9,58 @@ import torch
 import torch.distributed as dist
 
 try:
-    from exllamav2 import(
-        model_init,
-        # ExLlamaV2Cache,
-        # ExLlamaV2Cache_TP,
-        # ExLlamaV2Tokenizer,
-    )
-    from exllamav2.generator import (
-        ExLlamaV2BaseGenerator,
-    )
-except:
+    from exllamav2 import model_init
+    from exllamav2.generator import ExLlamaV2BaseGenerator
+except ImportError:
     print('WARNING: ExLlamaV2 not installed')
 
 from util import to_adict, fix_repeats
 from model_utils import load_model, load_chat_tokenizer, tokenize_data_batched, apply_chat_template_batched
-from ddp_utils import is_main, is_main_process
+from ddp_utils import is_main
 import torch.nn.functional as F
 
 #===================================================================================================
-''' Embedding Aggregation Functions : currently only supports ExLlamaV2 embeddings'''
+''' Embedding Layer Aggregation Functions : currently only supports ExLlamaV2 embeddings'''
 
-#---------------------------
-''' Embedding Aggregation Helper Function 
-    - implements multiple algorithms for randomly selecting layer indices
-    - based on random seed, so every call with same seed will return same layer indices selections
+def select_layer_indices(M, N, method=1, seed=1234):
+    """
+    Embedding Aggregation Helper Function
+    - Implements multiple algorithms for randomly selecting layer indices
+    - Based on random seed, so every call with same seed will return same layer indices selections
     - M is the number of layers, N is the number of embeddings dimensions in each layer
-'''
-
-def select_layer_indices(M, N, method=1, seed=1234, **kwargs):
-    #--------- method 1 #---------
+    
+    Args:
+        M (int): Number of layers.
+        N (int): Number of embedding dimensions in each layer.
+        method (int): Method for selecting layer indices. Possible values are:
+            0 - Linear probability distribution.
+            1 - Uniform random selection.
+            2 - Fixed number of random indices per layer.
+            3 - Combination of uniform random selection and fixed number of random indices.
+        seed (int): Random seed for reproducibility.
+    
+    Returns:
+        list: List of selected layer indices.
+    """
+    np.random.seed(seed)
+    
     if method == 0:
-        # p = np.arange(M)+1
-        p = np.linspace(1, min(5,M), M)
-        # p = np.linspace(1, 2, M)
-        p = p/np.sum(p) # normalize
-        r = np.random.RandomState(seed).choice(M, size=N, p=p)
-        I = [r==i for i in range(M)]
-    #--------- method 1 #---------
-    # ** Default method **
+        p = np.linspace(1, min(5, M), M)
+        p /= np.sum(p)
+        r = np.random.choice(M, size=N, p=p)
+        I = [r == i for i in range(M)]
+    
     elif method == 1:
-        r = np.random.RandomState(seed).randint(0, M, size=N)
-        I = [r==i for i in range(M)]
-    #--------- method 2 #---------
+        r = np.random.randint(0, M, size=N)
+        I = [r == i for i in range(M)]
+    
     elif method == 2:
         Q = 1.5
-        I, s = [], int(Q * N//M)
+        I, s = [], int(Q * N // M)
         for i in range(M):
-            p = np.random.RandomState(seed+i).permutation(N)
+            p = np.random.permutation(N)
             I.append(p[:s])
-    #--------- method 3 #---------
+
     elif method == 3:
         r = np.random.RandomState(seed).randint(0, M, size=N)
         I, s = [], int(1 * N//M)
@@ -66,26 +69,19 @@ def select_layer_indices(M, N, method=1, seed=1234, **kwargs):
             p = np.random.RandomState(seed+i).permutation(N)[:s]
             p = np.unique(np.concatenate((v,p)))
             I.append(p)
-    #---------------------------
+            
     return I
 
-''' Embedding Aggregation Functions 
-    - takes a dictionary of layer embeddings and aggregates them
-    - outputs a single numpy array of embeddings
-'''
-# L is a dict of layer numbers to numpy arrays
 def aggregate_layers(L, **kwargs):
-    # get the layer embeddings
+    """
+    Embedding Aggregation Functions
+    - Takes a dictionary of layer embeddings and aggregates them
+    - Outputs a single numpy array of embeddings
+    """
     X = list(L.values())
-    
-    # get the number of embedding layers, and the dimension of one embedding
-    M,N = len(X), X[0].shape[1]
-    
-    # get the layer indices to select
+    M, N = len(X), X[0].shape[1]
     I = select_layer_indices(M, N, **kwargs)
-    
-    # apply the layer indices 
-    return np.concatenate([x[:,i] for x,i in zip(X,I)], axis=1)
+    return np.concatenate([x[:, i] for x, i in zip(X, I)], axis=1)
 
             
 #===================================================================================================
@@ -108,7 +104,8 @@ might need to mokey patch...  only if we want multiple layers of embeddings... l
 '''
 
 class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
-
+    """Generator class for extracting embeddings from ExLlamaV2 models"""
+    
     def __init__(self, model, tokenizer, cfg, chat_tokenizer, batch_size=16):
         super().__init__(model, None, tokenizer)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -116,78 +113,106 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
         self.cfg = cfg
         self.batch_size = batch_size
 
-    ''' Compute Embedding : given a hidden state, returns either the last token embedding or the mean pooled embedding '''
     def _compute_embedding(self, ids, hidden, position_offsets, mode='last', debug=False):
-
-        # Last Token Embedding
+        """
+        Compute embedding from hidden state using specified pooling mode.
+        
+        Args:
+            ids (torch.Tensor): Token IDs tensor of shape (batch_size, seq_len)
+            hidden (torch.Tensor): Hidden state tensor of shape (batch_size, seq_len, hidden_dim)
+            position_offsets: Position offsets for batched inputs
+            mode: Pooling mode ('last' or 'mean')
+                debug: Whether to print debug information
+            inputs (list or str): List of strings to embed or a single string.
+            
+        Returns:
+            Tensor containing embeddings
+        """
         if mode == 'last':
+            # Last Token Embedding
             return hidden[:, -1, :]
         
-        # else mode == 'mean'....
         # Mean Pooled - weighted sum of embeddings
-        pad_mask = (ids != self.tokenizer.pad_token_id).long().to(hidden.device) # pad-mask
+        pad_mask = (ids != self.tokenizer.pad_token_id).long().to(hidden.device)
         weights = pad_mask / pad_mask.sum(dim=1).unsqueeze(-1)
         return torch.sum(torch.nan_to_num(hidden, nan=0.0) * weights.unsqueeze(-1), dim=1)
 
-
-    # *** USES LEFT PADDING ***
     def _compute_embeddings(self, 
-                            inputs, # a list of strings (*not* pre-tokenized)
-                            modes = ['last', 'mean'], # default is to return both last-token *and* mean embeddings, concatenated
-                            return_token=False, 
-                            debug=False, 
-                            **kwargs):
+                           inputs, 
+                           modes=['last', 'mean'],
+                           return_token=False, 
+                           debug=False, 
+                           **kwargs):
+        """
+        Compute embeddings for a batch of inputs.
+        
+        Args:
+            inputs: List of strings to embed
+            modes: List of pooling modes to use
+            return_token: Whether to return next predicted token
+            debug: Whether to print debug information
+            
+        Returns:
+            Numpy array of embeddings or dictionary of layer embeddings
+        """
         batch_size = 1 if isinstance(inputs, str) else len(inputs)
         prompts_identical = batch_size == 1 or all(s == inputs[0] for s in inputs)
 
-        # Tokenize Inputs 
-        # - ExLlamaV2 uses its own tokenizer, so inputs are *not* pre-tokenized (like for HuggingFace embedder, below)
+        # Tokenize inputs - ExLlamaV2 uses its own tokenizer
         ids, position_offsets = self.tokenizer.encode(inputs,
-                                                      encode_special_tokens = False,
-                                                      return_offsets = True,
-                                                      add_bos = False)
+                                                     encode_special_tokens=False,
+                                                     return_offsets=True,
+                                                     add_bos=False)
         if prompts_identical:
             position_offsets = None
         mask = self.tokenizer.padding_mask(ids) if batch_size > 1 else None
 
-        # forward pass
+        # Forward pass with error handling
         try:
             logits, hidden = self.model.forward(ids,
-                                                input_mask = mask,
-                                                position_offsets = position_offsets,
-                                                return_last_state = True,
-                                                **kwargs)
+                                               input_mask=mask,
+                                               position_offsets=position_offsets,
+                                               return_last_state=True,
+                                               **kwargs)
         except Exception as e1:
-            print(f"ERROR : {e1}")
+            print(f"ERROR: {e1}")
             traceback.print_exc()
-            print(f"\t====> Error in forward pass: ids.shape= {ids.shape}")
-            # get index of 0 in position_offsets, the longest input
-            idx = torch.where(position_offsets == 0)[0].item()
-            len1 = len(inputs[idx])
-            inputs = [fix_repeats(p) for p in inputs] # fix all inputs in case multiple degenerate
-            len2 = len(inputs[idx])
-            if len2/len1>0.8:
-                # get median input length
-                mlen = sorted([len(p) for p in inputs])[len(inputs)//2]
-                # truncate longest input to median length
-                inputs[idx] = inputs[idx][:mlen]
-
-            ids, position_offsets = self.tokenizer.encode(inputs,
-                                                          encode_special_tokens = False,
-                                                          return_offsets = True,
-                                                          add_bos = False)
-            print(f"\t====> Now ids.shape= {ids.shape}")
-            mask = self.tokenizer.padding_mask(ids) if batch_size > 1 else None
+            print(f"\t====> Error in forward pass: ids.shape={ids.shape}")
+            
+            # Handle degenerating inputs by fixing repeats and potentially truncating
             try:
+                # Find the longest input
+                idx = torch.where(position_offsets == 0)[0].item()
+                len1 = len(inputs[idx])
+                
+                # Fix repeating patterns in all inputs
+                inputs = [fix_repeats(p) for p in inputs]
+                len2 = len(inputs[idx])
+                
+                # If fixing didn't reduce size significantly, truncate to median length
+                if len2/len1 > 0.8:
+                    mlen = sorted([len(p) for p in inputs])[len(inputs)//2]
+                    inputs[idx] = inputs[idx][:mlen]
+
+                # Re-encode the fixed/truncated inputs
+                ids, position_offsets = self.tokenizer.encode(inputs,
+                                                            encode_special_tokens=False,
+                                                            return_offsets=True,
+                                                            add_bos=False)
+                print(f"\t====> Now ids.shape={ids.shape}")
+                mask = self.tokenizer.padding_mask(ids) if batch_size > 1 else None
+                
+                # Try forward pass again
                 logits, hidden = self.model.forward(ids,
-                                                    input_mask = mask,
-                                                    position_offsets = position_offsets,
-                                                    return_last_state = True,
-                                                    **kwargs)
-            except Exception as e2: 
-                print(f"ERROR : {e2}")
+                                                  input_mask=mask,
+                                                  position_offsets=position_offsets,
+                                                  return_last_state=True,
+                                                  **kwargs)
+            except Exception as e2:
+                print(f"ERROR: {e2}")
                 traceback.print_exc()
-                # get index of 0 in position_offsets, the longest input
+                
+                # More detailed error information
                 idx = torch.where(position_offsets == 0)[0].item()
                 print(f'longest input len = {len(inputs[idx])}')
                 print('-----------------------------------------------------------------')
@@ -196,27 +221,23 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
                 print(f"Prompt: {self.tokenizer.decode(ids[idx])}")
                 sys.exit(1)
 
-
-        #-----------------------------------------------------------------
-        # get embeddings
+        # Process embeddings based on hidden state format
         if not isinstance(hidden, dict):
+            # Single hidden state - process according to requested modes
             xx = []
             for mode in modes:
-                xx += [self._compute_embedding(ids, hidden, position_offsets, mode=mode, debug=debug)]
+                xx.append(self._compute_embedding(ids, hidden, position_offsets, mode=mode, debug=debug))
             x = torch.cat(xx, dim=-1).cpu().numpy()
-            
-        else: # multiple hidden states
+        else:
+            # Multiple hidden states (layer outputs)
             x = {}
             for key, value in hidden.items():
                 xx = []
                 for mode in modes:
-                    xx += [self._compute_embedding(ids, value, position_offsets, mode=mode, debug=debug)]
+                    xx.append(self._compute_embedding(ids, value, position_offsets, mode=mode, debug=debug))
                 x[key] = torch.cat(xx, dim=-1).cpu().numpy()
 
-        #-----------------------------------------------------------------
-        # get the actual next token generated on the forward pass
-        # 1. this is useful as sanity check 
-        # 2. token can be added to embedding (token == score prediction)
+        # Optionally include predicted next token
         if return_token:
             tok_ids = logits[:, -1, :].argmax(-1)
             x = (x, tok_ids)
@@ -227,47 +248,53 @@ class ExLlamaV2EmbeddingGenerator(ExLlamaV2BaseGenerator):
                     print(f"Prompt {i+1}: {inputs[i]}")
                     print(f"Next Token: {token}\n")
         
-        # return the embeddings (and token if requested)
         return x
     
     def compute_embeddings(self, data, **kwargs):
+        """
+        Compute embeddings for a dataset.
+        
+        Args:
+            data: Dictionary of items to records
+            
+        Returns:
+            Dictionary containing embeddings, scores and indices
+        """
         emb_data = {}
         disable_outer = len(data) < 2
+        
         for item, records in tqdm(data.items(), desc="Computing embeddings", disable=disable_outer):
-            
-            # get chat_text
+            # Apply chat template
             inputs = apply_chat_template_batched(self.chat_tokenizer, records)
             
-            # compute embeddings in batches
+            # Compute embeddings in batches
             x = []
-            #for i in range(0, len(inputs), self.batch_size):
-            for i in tqdm(range(0, len(inputs), self.batch_size), desc="Computing embeddings", disable=not disable_outer):
-                x += [self._compute_embeddings(inputs[i:i+self.batch_size], **kwargs)]
-                
+            batch_range = range(0, len(inputs), self.batch_size)
+            for i in tqdm(batch_range, desc="Processing batches", disable=not disable_outer):
+                batch_inputs = inputs[i:i+self.batch_size]
+                x.append(self._compute_embeddings(batch_inputs, **kwargs))
+            
+            # Process results based on whether we have multi-layer embeddings
             if isinstance(x[0], dict):
-                # merge dictionaries for multilayer embeddings
+                # Merge dictionaries for multi-layer embeddings
                 x = {k: np.concatenate([xx[k] for xx in x], axis=0) for k in x[0]}
-                # get first k,v pair in x
-                k, v = next(iter(x.items()))
-                assert len(v) == len(records) # sanity check
             else:
                 x = np.concatenate(x, axis=0)
-                assert len(x) == len(records) # sanity check
+                
+            # Verify output dimensions match input records
+            assert len(next(iter(x.values())) if isinstance(x, dict) else x) == len(records)
             
-            # store embeddings and scores
-            emb_data[item] = {'x': x, 
-                              'y': np.array([rec.score for rec in records]),
-                              'idx': np.array([rec.index for rec in records]),
-                              }
+            # Store embeddings and metadata
+            emb_data[item] = {
+                'x': x, 
+                'y': np.array([rec.score for rec in records]),
+                'idx': np.array([rec.index for rec in records]),
+            }
             
         return emb_data
         
-    
-#===================================================================================================
 
 ''' HuggingFace Embedding Extractor '''
-
-
 def _get_hf_embedding(last_hidden,
                       attention_mask,
                       pooling_strategy="mean",
@@ -343,148 +370,40 @@ def get_hf_embedding(model,
     # Get the last hidden state - default is -1, i.e. the last (top) layer
     last_hidden = outputs.hidden_states[hidden_layer]  # [batch_size, seq_len, hidden_size]
     
-    #-------------------------------------------------------------------------------
     output = [_get_hf_embedding(last_hidden, attention_mask, ps, padding_side, last_token_offset) for ps in pooling_strategy.split(",")]
     output = torch.cat(output, dim=-1)
-        
-    # # single pooling strategy (str) or multiple pooling strategies (list)...
-    # if isinstance(pooling_strategy, str):
-    #     output = _get_hf_embedding(last_hidden, attention_mask, pooling_strategy, padding_side, last_token_offset)
-    # elif isinstance(pooling_strategy, list):
-    #     output = [_get_hf_embedding(last_hidden, attention_mask, ps, padding_side, last_token_offset) for ps in pooling_strategy]
-    #     output = torch.cat(output, dim=-1)
-    # else:
-    #     raise ValueError(f"Pooling strategy '{pooling_strategy}' not recognized.")
-    
-    #-------------------------------------------------------------------------------
-    # if normalize:
-    #     output = F.normalize(output, p=2, dim=-1)
-    # #     output = output / output.norm(dim=-1, keepdim=True)
-    #-------------------------------------------------------------------------------
 
     if labels is None:
         return output
     return output, loss
 
-from torch.nn import CrossEntropyLoss
-
-#===================================================================================================
-# PACKING VERSION
-# for use with packed siamese sequences
-def get_hf_embeddings(model, 
-                      input_ids, 
-                      attention_mask,
-                      seq_lens,
-                      labels=None,
-                      pooling_strategy="mean",
-                      **kwargs,
-                      ):
-    """
-    Works with both left and right padding.
-    """
-    if labels is not None:
-        if isinstance(labels, bool):
-            if labels: # if labels is True, set labels to input_ids where attention_mask is 1
-                labels = input_ids.masked_fill(attention_mask == 0, -100)
-            else: # if labels is False, set labels to None
-                labels = None
-
-    # Get model outputs
-    outputs = model(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-        labels=labels,
-        # labels = None,
-        output_hidden_states=True,
-        return_dict=True
-    )
-    attention_mask = attention_mask.to(dtype=outputs.hidden_states[-1].dtype)
-    loss = outputs.loss if labels is not None else None
-
-    #-------------------------------------------------------------------------------
-    X = outputs.hidden_states[-1]  # [batch_size, seq_len, hidden_size]
-    
-    # get dims of X tensor
-    B, L, H = X.shape
-    
-    # horizontally cum sum seq_lens, but set S to 0 wherever seq_lens is 0
-    # S = torch.cumsum(seq_lens, dim=1) * (seq_lens > 0)
-    S = seq_lens
-
-    #-------------------------------------------------------------------------------
-    if pooling_strategy == "last":
-        # get indices of non-zero seq_lens
-        idx = (S[:,0::2] > 0).reshape(-1)
-        S1, S2 = S[:,0::2]-1, S[:,1::2]-1
-        
-        S1 = S1 * (S1 > 0)
-        S2 = S2 * (S2 > 0)
-        
-        # batch_indices = torch.arange(B, device=X.device)
-        # T1 = X[batch_indices, S1]
-        # T2 = X[batch_indices, S2]
-        
-        S1_expanded = S1.unsqueeze(-1).expand(-1, -1, H)
-        S2_expanded = S2.unsqueeze(-1).expand(-1, -1, H)
-        T1 = X.gather(dim=1, index=S1_expanded)
-        T2 = X.gather(dim=1, index=S2_expanded)
-        
-        # reshape T1 and T2 to [?, H] and select only non-zero seq_lens
-        T1 = T1.reshape(-1, H)[idx]
-        T2 = T2.reshape(-1, H)[idx]
-        
-        output = T1,T2
-        # print("T1 shape:", T1.shape)
-        # print("T2 shape:", T2.shape)
-    
-    #-------------------------------------------------------------------------------
-    else:  # mean pooling
-        T1_list = []
-        T2_list = []
-        
-        for b in range(B):
-            # x_b: shape [N, D] for batch element b
-            x_b = X[b]
-            # s_b: shape [M], containing pairs of lengths
-            s_b = S[b]
-            
-            offset = 0
-            for j in range(0, len(s_b), 2):
-                L1 = s_b[j].item()
-                L2 = s_b[j+1].item()
-                # If either length is 0, stop processing row
-                if L1==0 or L2==0:
-                    break
-                # T1 slice: [offset : offset + L1]
-                mean1 = x_b[offset : L1].mean(dim=0)
-                # T2 slice: [L1 : L1 + L2]
-                mean2 = x_b[L1 : L2].mean(dim=0)
-                # Append means to lists
-                T1_list.append(mean1)
-                T2_list.append(mean2)
-                # Update offset
-                offset = L2
-                
-        # Now stack them vertically
-        T1 = torch.stack(T1_list, dim=0)  # shape [?, D]
-        T2 = torch.stack(T2_list, dim=0)  # shape [?, D]
-        output = T1,T2
-        # print("T1 shape:", T1.shape)
-        # print("T2 shape:", T2.shape)
-        
-    #-------------------------------------------------------------------------------
-    if labels is None:
-        return output
-    return output, loss
-
-#===================================================================================================
-''' DDP version of compute_hf_embeddings : allows for multi-GPU inference
-    - uses DDP to split batches across GPUs
-    - gathers embeddings and scores from all GPUs
-    - also gathers 'index' from each record, in order to return embeddings in the same order
-'''
 
 def compute_hf_embeddings_ddp(model, data, hidden_layer=-1, verbose=False, **kwargs):
+    """
+    Computes embeddings for the provided data using a Hugging Face model, supporting both single GPU and distributed data parallel (DDP) configurations.
+    This function tokenizes the input data (if not already tokenized) using the model's tokenizer or a provided tokenizer, processes the data in batches, and extracts embeddings from a specified hidden layer. In DDP mode, the batches are split across GPUs and the results are gathered on the main process (rank 0), ensuring the embeddings are ordered correctly. 
+    Parameters:
+        model (torch.nn.Module): The model used for embedding extraction. It should have a callable method for embedding extraction (via get_hf_embedding) and ideally a 'tokenizer' attribute.
+        data (dict): A dictionary where each key maps to a list of records. Each record is expected to have at least the following attributes:
+                     - batch_index: An integer used to determine GPU assignment in DDP.
+                     - tokenized_text: A dictionary containing pre-tokenized inputs (e.g., 'input_ids', 'attention_mask').
+                     - score: A numerical score associated with the record.
+                     - index: A unique identifier for the record.
+        hidden_layer (int, optional): The index of the hidden layer from which to extract embeddings. Defaults to -1 (typically the last layer).
+        verbose (bool, optional): If True, prints debug and status information during processing. Defaults to False.
+        **kwargs: Additional keyword arguments. May include:
+                  - tokenizer: An alternative tokenizer in case the model does not have a built-in tokenizer.
+                  - other parameters needed for tokenization and embedding extraction.
+    Returns:
+        dict: A dictionary mapping each item from the input data to a dictionary with the following keys:
+              - 'x': A NumPy array containing the embeddings for all records, ordered according to their original indices.
+              - 'y': A NumPy array with the scores corresponding to each record.
+              - 'idx': A NumPy array with the unique identifiers of the records.
+    Notes:
+        - In distributed mode, this function communicates between GPUs using torch.distributed to gather embeddings on the main process.
+        - A barrier synchronization is performed at the end of processing for each item.
+        - It is assumed that auxiliary functions (e.g., tokenize_data_batched, get_hf_embedding) and necessary modules (e.g., torch, numpy, torch.distributed as dist, tqdm) are properly imported and configured outside of this function.
+    """
     emb_data = {}
     is_distributed = dist.is_initialized()
     rank = dist.get_rank() if is_distributed else 0
@@ -664,7 +583,31 @@ def compute_hf_embeddings_ddp(model, data, hidden_layer=-1, verbose=False, **kwa
     return emb_data
 
 #===================================================================================================
+
 def compute_st_embeddings_ddp(model, data, verbose=False, **kwargs):
+    """
+    Compute sentence-transformer embeddings for the provided dataset using Distributed Data Parallel (DDP).
+    This function processes input data by tokenizing it and computing embeddings using the provided model. It supports both distributed and single-GPU modes. In DDP mode, the records are split across multiple GPUs, where each GPU processes its local batches and the results are gathered and ordered by the process with rank 0. In single-GPU mode, all processing is performed locally.
+    Parameters:
+        model (torch.nn.Module): The model used for encoding text into embeddings. This model should offer an 'encode' method
+                                 and may optionally include a 'tokenizer' attribute.
+        data (dict): A dictionary mapping item identifiers to collections of records. Each record is expected to contain
+                     attributes like 'batch_index', 'chat_text', 'score', and 'index'. Tokenization is applied to these records.
+        verbose (bool, optional): If True, prints detailed logging information during processing. Defaults to False.
+        **kwargs: Additional keyword arguments. Notably, this includes:
+            - 'tokenizer': A tokenizer to use if the model does not already have one.
+            - Other parameters that may be used by the 'tokenize_data_batched' function during tokenization.
+    Returns:
+        dict: A dictionary (emb_data) where each key corresponds to an input item and maps to another dictionary with:
+            - 'x' (numpy.ndarray): The computed embeddings ordered based on the original record indexing.
+            - 'y' (numpy.ndarray): The scores associated with each record.
+            - 'idx' (numpy.ndarray): The original indices of the records.
+    Notes:
+        - The function first checks for and applies tokenization using either the model's tokenizer or the one provided in kwargs.
+        - In DDP mode, batches are distributed across GPUs based on the 'batch_index' modulo the world size.
+        - The rank 0 process gathers embeddings from all other processes, orders the results, and constructs the final arrays.
+        - Synchronization is performed at the end of processing each item to ensure all distributed processes are aligned.
+    """
     emb_data = {}
     is_distributed = dist.is_initialized()
     rank = dist.get_rank() if is_distributed else 0
@@ -871,34 +814,6 @@ class SentenceTransformerEmbedder(Embedder):
     def compute_embeddings(self, data, **kwargs):
         
         return compute_st_embeddings_ddp(self.model, data, **kwargs)
-    
-        # emb_data = {}
-        
-        # # Start the multi-process pool on all available CUDA devices
-        # # pool = self.model.start_multi_process_pool()
-        
-        # disable = len(data) < 2 or not is_main()
-        # for item, records in tqdm(data.items(), desc="Getting embeddings", disable=disable):
-        #     texts = [rec.text for rec in records]
-            
-        #     # emb = self.model.encode(texts)
-            
-        #     # # Start the multi-process pool on all available CUDA devices
-        #     pool = self.model.start_multi_process_pool()
-        #     emb = self.model.encode_multi_process(texts, pool, chunk_size=50)
-            
-        #     print("Embeddings computed. Shape:", emb.shape)
-            
-        #     self.model.stop_multi_process_pool(pool)
-            
-        #     emb_data[item] = {'x': emb, #.cpu().numpy(), 
-        #                       'y': np.array([rec.score for rec in records]),
-        #                       'idx': np.array([rec.index for rec in records]),
-        #                       }
-            
-        # # self.model.stop_multi_process_pool(pool)
-        
-        # return emb_data
 
 #---------------------------------------------------------------------------------------
 ''' HuggingfaceEmbedder class for Huggingface LLM models : Can be used for Single-GPU or DDP/Multi-GPU inference 
@@ -912,29 +827,17 @@ class HuggingfaceEmbedder(Embedder):
             super().__init__(cfg)
             self.model = load_model(cfg)
         else:
-            # self.cfg = {}#dsv
-            # self.model = kwargs.get('model', None)#dsv
-            # tokenizer = kwargs.get('tokenizer', None)#dsv
             self.model = model
             if self.model is not None and tokenizer is not None:
                 self.model.tokenizer = tokenizer
             self.cfg = to_adict(kwargs)
         
     def get_embedding(self, input_ids, attention_mask, **kwargs):
-        kwargs = {**self.cfg, **kwargs}#dsv
-        if 'seq_lens' not in kwargs:
-            # use this for regular single sequences
-            return get_hf_embedding(self.model, input_ids, attention_mask, **kwargs)
-        #-----------------------------------------------------------------
-        # use this ONLY for siamese sequence packing
-        print('*** USING PACKING VERSION of get_hf_embeddings ***')
-        return get_hf_embeddings(self.model, input_ids, attention_mask, **kwargs)
-        #-----------------------------------------------------------------
+        return get_hf_embedding(self.model, input_ids, attention_mask, **{**self.cfg, **kwargs})
         
-    # data is a dictionary of item to record list
+    # data is a dictionary of { item : record list }
     def compute_embeddings(self, data, **kwargs):
-        kwargs = {**self.cfg, **kwargs}#dsv
-        return compute_hf_embeddings_ddp(self.model, data, **kwargs) # calls get_hf_embedding internally...
+        return compute_hf_embeddings_ddp(self.model, data, **{**self.cfg, **kwargs}) # calls get_hf_embedding internally...
 
 #---------------------------------------------------------------------------------------
 ''' ExLlamaV2Embedder class for ExLlamaV2 LLM models : Only single-GPU mode 
@@ -1015,9 +918,3 @@ def EmbedderFactory(cfg=None, model_id=None, model_type='hf'): # model_type = 'h
 
     # Huggingface LLM models
     return HuggingfaceEmbedder(cfg)
-
-    # load config to detect model type...
-    # config = AutoConfig.from_pretrained(model_id)
-    # arch = config.architectures[0].lower()
-    # if 'bert' in arch: # BERT embedding models
-    #     return BertEmbedder(cfg)
