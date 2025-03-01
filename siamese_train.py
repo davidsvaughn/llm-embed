@@ -85,6 +85,7 @@ class ScriptArguments:
     subsample_train:Optional[float] = field(default=1000000, metadata={"help": "The number of training samples to use"})
     subsample_eval: Optional[float] = field(default=20000, metadata={"help": "The number of evaluation samples to use"})
     max_samples:    Optional[int]   = field(default=1000000, metadata={"help": "The maximum number of samples to load"})
+    tokenize_only:  Optional[bool]  = field(default=False, metadata={"help": "Whether to tokenize only"})
     
     # LoRA parameters
     lora_alpha:     Optional[int]   = field(default=32, metadata={"help": "The LoRA alpha parameter"})
@@ -400,6 +401,9 @@ tokenizer.pad_token = tokenizer.eos_token
 
 # Load or prepare the dataset
 hf_dataset_id = load_or_prepare_dataset(tokenizer, script_args)
+if script_args.tokenize_only:
+    sys.exit()
+
 print(f"\nLoading tokenized dataset from HuggingFace hub: {hf_dataset_id}")
 llm_dataset = load_dataset(hf_dataset_id)
 

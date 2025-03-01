@@ -1,13 +1,14 @@
 #!/bin/bash
 
+DATASET_ID="davidsvaughn/math_pairs_1426"
+MODEL_ID="microsoft/Phi-4-mini-instruct"
+
 # tokenize & save dataset
-python siamese_train.py --dataset_id davidsvaughn/math_pairs_1426
+python siamese_train.py --dataset_id $DATASET_ID --model_id $MODEL_ID --tokenize_only
 
 # Run training
-torchrun --nproc_per_node 4 siamese_train.py --dataset_id davidsvaughn/math_pairs_1426
-
-# Run training with arguments
-# torchrun --nproc_per_node 4 siamese_train.py \
-#     --batch_size 4 \
-#     --num_epochs 5 \
-#     --learning_rate 0.001 \
+torchrun --nproc_per_node 4 siamese_train.py \
+    --dataset_id $DATASET_ID \
+    --model_id $MODEL_ID \
+    --pooling_mode lasttoken \
+    --lm_loss_weight 0.01
