@@ -1,5 +1,5 @@
 # llm-embed
-turn LLMs into embedding models
+Turn LLMs into embedding models. A framework for fine-tuning LLMs into high-performance embedding models using a novel hybrid objective function that combines siamese contrastive loss with causal language modeling loss. 
 
 setup
 ```
