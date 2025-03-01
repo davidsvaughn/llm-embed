@@ -112,7 +112,7 @@ class ScriptArguments:
     pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     # debugging
-    debug:          Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
+    # debug:          Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
     
     ## *prompt templates are now applied during dataset creation, not here ##
     # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
@@ -200,32 +200,32 @@ if 'fw' in script_args.dataset_id[0]:
 #---------------------------------------------------------------------------------------
 # Debugging and logging setup
 
-if script_args.debug:
-    training_args.logging_steps = 10
+# if script_args.debug:
+#     training_args.logging_steps = 10
     
-    if script_args.debug == 1:
-        script_args.subsample_eval = 5000
-        training_args.eval_steps = 100
-        training_args.save_steps = training_args.eval_steps
-    elif script_args.debug == 2:
-        training_args.gradient_accumulation_steps = 2
-        script_args.max_samples = 10000
-        script_args.subsample_eval = 1000
-        training_args.eval_steps = 50
-        training_args.save_steps = training_args.eval_steps
-    elif script_args.debug == 3:
-        training_args.gradient_accumulation_steps = 2
-        script_args.max_samples = 5000
-        script_args.subsample_train = 10000
-        script_args.subsample_eval = 500
-        test_items = {'math': [123362]}
-    elif script_args.debug == 4:
-        training_args.gradient_accumulation_steps = 2
-        script_args.max_samples = 5000
-        script_args.subsample_train = 500
-        script_args.subsample_eval = 100
-        training_args.eval_steps = 300          
-        test_items = {'math': [123362]}
+#     if script_args.debug == 1:
+#         script_args.subsample_eval = 5000
+#         training_args.eval_steps = 100
+#         training_args.save_steps = training_args.eval_steps
+#     elif script_args.debug == 2:
+#         training_args.gradient_accumulation_steps = 2
+#         script_args.max_samples = 10000
+#         script_args.subsample_eval = 1000
+#         training_args.eval_steps = 50
+#         training_args.save_steps = training_args.eval_steps
+#     elif script_args.debug == 3:
+#         training_args.gradient_accumulation_steps = 2
+#         script_args.max_samples = 5000
+#         script_args.subsample_train = 10000
+#         script_args.subsample_eval = 500
+#         test_items = {'math': [123362]}
+#     elif script_args.debug == 4:
+#         training_args.gradient_accumulation_steps = 2
+#         script_args.max_samples = 5000
+#         script_args.subsample_train = 500
+#         script_args.subsample_eval = 100
+#         training_args.eval_steps = 300          
+#         test_items = {'math': [123362]}
                     
 #---------------------------------------------------------------------------------------
 
