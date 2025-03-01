@@ -70,8 +70,8 @@ deepspeed_dir = os.path.join(cur_dir, 'deepspeed')
 @dataclass
 class ScriptArguments:
     
-    model_id:       str             = field(default="meta-llama/Llama-3.2-3B-Instruct", metadata={"help": "The HuggingFace model id"})
-    # model_id:       str             = field(default="microsoft/Phi-4-mini-instruct", metadata={"help": "The HuggingFace model id"})
+    # model_id:       str             = field(default="meta-llama/Llama-3.2-3B-Instruct", metadata={"help": "The HuggingFace model id"})
+    model_id:       str             = field(default="microsoft/Phi-4-mini-instruct", metadata={"help": "The HuggingFace model id"})
     # model_id:       str             = field(default="microsoft/Phi-3-mini-128k-instruct", metadata={"help": "The HuggingFace model id"})
     # model_id:       str             = field(default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", metadata={"help": "The HuggingFace model id"})
     
@@ -112,7 +112,7 @@ class ScriptArguments:
     pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     # debugging
-    # debug:          Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
+    debug_level:    Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
     
     ## *prompt templates are now applied during dataset creation, not here ##
     # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
@@ -176,6 +176,11 @@ if is_main():
 #         with open(cur_dir+'/'+getattr(script_args, k), 'r') as f:
 #             setattr(script_args, k, f.read())
 
+# convert any relative paths containing '~' to absolute paths
+for k in ['prompt_dir', 'data_dir']:
+    if getattr(script_args, k) is not None:
+        setattr(script_args, k, os.path.expanduser(getattr(script_args, k)))
+
 # Cast to dataclass
 script_args = ScriptArguments(**vars(script_args))  # Cast namespace to dataclass
 
@@ -200,32 +205,35 @@ if 'fw' in script_args.dataset_id[0]:
 #---------------------------------------------------------------------------------------
 # Debugging and logging setup
 
-# if script_args.debug:
-#     training_args.logging_steps = 10
+if script_args.debug_level:
+    training_args.logging_steps = 10
     
-#     if script_args.debug == 1:
-#         script_args.subsample_eval = 5000
-#         training_args.eval_steps = 100
-#         training_args.save_steps = training_args.eval_steps
-#     elif script_args.debug == 2:
-#         training_args.gradient_accumulation_steps = 2
-#         script_args.max_samples = 10000
-#         script_args.subsample_eval = 1000
-#         training_args.eval_steps = 50
-#         training_args.save_steps = training_args.eval_steps
-#     elif script_args.debug == 3:
-#         training_args.gradient_accumulation_steps = 2
-#         script_args.max_samples = 5000
-#         script_args.subsample_train = 10000
-#         script_args.subsample_eval = 500
-#         test_items = {'math': [123362]}
-#     elif script_args.debug == 4:
-#         training_args.gradient_accumulation_steps = 2
-#         script_args.max_samples = 5000
-#         script_args.subsample_train = 500
-#         script_args.subsample_eval = 100
-#         training_args.eval_steps = 300          
-#         test_items = {'math': [123362]}
+    if script_args.debug_level == 1:
+        script_args.subsample_eval = 5000
+        training_args.eval_steps = 100
+        training_args.save_steps = training_args.eval_steps
+    elif script_args.debug_level == 2:
+        training_args.gradient_accumulation_steps = 2
+        script_args.max_samples = 10000
+        script_args.subsample_eval = 1000
+        training_args.eval_steps = 50
+        training_args.save_steps = training_args.eval_steps
+    elif script_args.debug_level == 3:
+        training_args.gradient_accumulation_steps = 2
+        script_args.max_samples = 5000
+        script_args.subsample_train = 10000
+        script_args.subsample_eval = 500
+        training_args.eval_steps = 20
+        training_args.save_steps = training_args.eval_steps
+        test_items = {'math': [123362]}
+    elif script_args.debug_level == 4:
+        training_args.gradient_accumulation_steps = 2
+        script_args.max_samples = 5000
+        script_args.subsample_train = 500
+        script_args.subsample_eval = 100
+        training_args.eval_steps = 300
+        training_args.save_steps = training_args.eval_steps         
+        test_items = {'math': [123362]}
                     
 #---------------------------------------------------------------------------------------
 
@@ -650,7 +658,7 @@ def remove_files(file_paths):
         except Exception as e:
             print(f'Failed to delete "{file_path}". Reason: {e}')
 
-# Save model callback
+# ORIGINAL
 class SaveDeepSpeedPeftModelCallback(TrainerCallback):
     def __init__(self, trainer, save_steps=500):
         self.trainer = trainer
@@ -669,6 +677,68 @@ class SaveDeepSpeedPeftModelCallback(TrainerCallback):
                 
             self.trainer.accelerator.wait_for_everyone()
         return control
+    
+# class SaveDeepSpeedPeftModelCallback(TrainerCallback):
+#     def __init__(self, trainer, save_steps=500):
+#         self.trainer = trainer
+#         self.save_steps = save_steps
+
+#     def on_step_end(self, args, state, control, **kwargs):
+#         if (state.global_step) % self.save_steps == 0:
+#             self.trainer.accelerator.wait_for_everyone()
+            
+#             model = self.trainer.model_wrapped if hasattr(self.trainer, "model_wrapped") else self.trainer.model
+#             unwrapped_model = self.trainer.accelerator.unwrap_model(model)
+            
+#             if self.trainer.accelerator.is_main_process:
+#                 ckpt_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
+#                 # Use save_pretrained with safe_serialization=False to avoid the shared tensor issue
+#                 unwrapped_model.encoder.save_pretrained(
+#                     ckpt_dir, 
+#                     safe_serialization=False,  # Add this parameter to avoid safetensors issue
+#                     **kwargs
+#                 )
+                
+#             self.trainer.accelerator.wait_for_everyone()
+#         return control
+    
+# class SaveDeepSpeedPeftModelCallback(TrainerCallback):
+#     def __init__(self, trainer, save_steps=500):
+#         self.trainer = trainer
+#         self.save_steps = save_steps
+
+#     def on_step_end(self, args, state, control, **kwargs):
+#         if (state.global_step) % self.save_steps == 0:
+#             self.trainer.accelerator.wait_for_everyone()
+            
+#             model = self.trainer.model_wrapped if hasattr(self.trainer, "model_wrapped") else self.trainer.model
+#             unwrapped_model = self.trainer.accelerator.unwrap_model(model)
+            
+#             if self.trainer.accelerator.is_main_process:
+#                 ckpt_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
+                
+#                 # Get the base model
+#                 base_model = unwrapped_model.encoder.base_model.model
+                
+#                 # Check if weights are tied, and temporarily untie them
+#                 weights_tied = False
+#                 if hasattr(base_model, "model") and hasattr(base_model.model, "embed_tokens") and hasattr(base_model, "lm_head"):
+#                     if id(base_model.model.embed_tokens.weight) == id(base_model.lm_head.weight):
+#                         weights_tied = True
+#                         # Create a copy of lm_head weights
+#                         lm_head_weight_copy = base_model.lm_head.weight.clone()
+#                         # Replace with a new tensor
+#                         base_model.lm_head.weight = torch.nn.Parameter(lm_head_weight_copy)
+                
+#                 # Save the model
+#                 unwrapped_model.encoder.save_pretrained(ckpt_dir, **kwargs)
+                
+#                 # Restore tied weights if needed
+#                 if weights_tied:
+#                     base_model.lm_head.weight = base_model.model.embed_tokens.weight
+                
+#             self.trainer.accelerator.wait_for_everyone()
+#         return control
 
 # Hub upload tracking
 uploaded_checkpoints = set()
@@ -798,7 +868,6 @@ if __name__ == "__main__":
     # Begin training
     trainer.train()
     
-    # Save final model if needed
-    if is_main():
-        print("Training completed. Final model saved to:", training_args.output_dir)
-
+    # # Save final model if needed
+    # if is_main():
+    #     print("Training completed. Final model saved to:", training_args.output_dir)
