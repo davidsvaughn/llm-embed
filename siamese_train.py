@@ -272,7 +272,7 @@ def make_json_serializable(d):
     return {k: v if is_json_serializable(v) else str(v) for k, v in d.items()}
 
 # Initialize wandb logging
-if is_main():
+if is_main() and not script_args.tokenize_only:
     wandb.init(project= f"Embedding-LLM--{script_args.dataset_id[0].replace('/','_')}")
     wandb.config.update(make_json_serializable(asdict(training_args)))
     wandb.config.update(make_json_serializable(asdict(script_args)))
