@@ -114,10 +114,6 @@ class ScriptArguments:
     
     # debugging
     debug_level:    Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
-    
-    ## *prompt templates are now applied during dataset creation, not here ##
-    # prompt_template:str             = field(default="prompts/math/user.j2", metadata={"help": "The prompt template to use"})
-    # use_jinja2:     Optional[bool]  = field(default=True, metadata={"help": "Whether to use jinja2 templates"})
 
 # Setup default training arguments
 training_args = TrainingArguments(
@@ -170,17 +166,20 @@ if is_main():
         with open(training_args.deepspeed, 'w') as f:
             f.write(ds_config)
 
-# # Handle prompt template files (*prompt templates are now applied during dataset creation, not here)  
-# for k in ['prompt_template']:
-#     if getattr(script_args, k).endswith('.j2'):
-#         script_args.use_jinja2 = True
-#         with open(cur_dir+'/'+getattr(script_args, k), 'r') as f:
-#             setattr(script_args, k, f.read())
-
 # convert any relative paths containing '~' to absolute paths
 for k in ['prompt_dir', 'data_dir']:
     if getattr(script_args, k) is not None:
         setattr(script_args, k, os.path.expanduser(getattr(script_args, k)))
+        
+# if rand_seed<0, set it to a random value, making sure all processes use the same seed
+if script_args.rand_seed < 0:
+    if is_main():
+        script_args.rand_seed = random.randint(0, 1000000)
+    if get_num_processes() > 1:
+        # Broadcast the seed from main process to all other processes
+        seed_tensor = torch.tensor([script_args.rand_seed], device='cuda' if torch.cuda.is_available() else 'cpu')
+        dist.broadcast(seed_tensor, src=0)
+        script_args.rand_seed = seed_tensor.item()
 
 # Cast to dataclass
 script_args = ScriptArguments(**vars(script_args))  # Cast namespace to dataclass
@@ -248,7 +247,6 @@ if is_main():
     print("\n-------- Script Arguments -----------")
     for key, value in asdict(script_args).items():
         print(f"{key}: {value}")
-    print('-'*100)
 
     # Create or increment output directory
     i, prefix = 0, training_args.output_dir
@@ -257,6 +255,13 @@ if is_main():
         training_args.output_dir = f"{prefix}{i}"
     os.makedirs(training_args.output_dir, exist_ok=True)
     print(f"OUTPUT DIRECTORY: {training_args.output_dir}")
+    print(f"RANDOM SEED: {script_args.rand_seed}")
+    print('-'*100)
+    
+else:
+    print(f"RANDOM SEED: {script_args.rand_seed}")
+    # Synchronize all processes
+    dist.barrier()
 
 #--------------------------------------------------------------------------------------------------
 # Logging setup and random seed initialization

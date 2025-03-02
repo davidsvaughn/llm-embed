@@ -98,10 +98,10 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
 
     #------------------------------------------------------------------------------
     # min/max checkpoint numbers
-    # min_num, max_num = 2500, 3000
+    min_num, max_num = 800, 3000
     #------------------------------------------------------------------------------
     # output_dir = '/home/azureuser/embed/output2'
-    filters = [2750]
+    # filters = [2750]
     #------------------------------------------------------------------------------
 
     # get checkpoint directories
@@ -165,10 +165,10 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
     if is_main():
         print("Done")
 
-def run_checkpoints():
+def test_checkpoints():
     
     root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
+    root_prompt_dir = '/home/azureuser/llm-embed/prompts'
     
     #-----------------------------------------------------------------------------
     # Get config for each item type
@@ -176,7 +176,7 @@ def run_checkpoints():
                      random_state=42,
                      root_data_dir=root_data_dir,
                      root_prompt_dir=root_prompt_dir,
-                    #  items = [123362, 33082, 13272, 27218, 29632, 31600, 52414, 78382],
+                     items = [123362, 33082, 13272, 27218, 29632, 31600, 52414, 78382], # standard math test set
                      filter_in_mult=2, hh_min=0.6,
                      )
     
@@ -195,16 +195,16 @@ def run_checkpoints():
     
     # each output_dir should contain multiple checkpoint directories
     output_dirs = [
-        # '/home/azureuser/embed/output',
-        '/home/azureuser/embed/output1',
-        # '/home/azureuser/embed/output5',
+        '/home/azureuser/llm-embed/output',
+        # '/home/azureuser/llm-embed/output1',
+        # '/home/azureuser/llm-embed/output5',
         ]
 
     for output_dir in output_dirs:
         scan_checkpoints(cfg, output_dir,
                          pooling_mode='mean',
                         #  pooling_mode='lasttoken',
-                        K=0,
+                        #  K=0, # use pre-set train/val split
                          )
         
 #------------------------------------------------------------------------------
@@ -391,7 +391,7 @@ if __name__ == "__main__":
     
     #------------------------------------------------------------------------------\
     ''' run xgb on items for each checkpoint '''
-    run_checkpoints()
+    test_checkpoints()
     
     #------------------------------------------------------------------------------\
     ''' test xgb on SentenceTransformer checkpoint '''
