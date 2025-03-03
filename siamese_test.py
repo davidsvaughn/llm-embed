@@ -98,10 +98,10 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
 
     #------------------------------------------------------------------------------
     # min/max checkpoint numbers
-    min_num, max_num = 800, 3000
+    # min_num, max_num = 1100, 2750
     #------------------------------------------------------------------------------
     # output_dir = '/home/azureuser/embed/output2'
-    # filters = [2750]
+    filters = [2250, ]#4400, 2400, 2050, 3300] # 2150 2250
     #------------------------------------------------------------------------------
 
     # get checkpoint directories
@@ -195,15 +195,15 @@ def test_checkpoints():
     
     # each output_dir should contain multiple checkpoint directories
     output_dirs = [
-        '/home/azureuser/llm-embed/output',
         # '/home/azureuser/llm-embed/output1',
-        # '/home/azureuser/llm-embed/output5',
+        # '/home/azureuser/llm-embed/output2',
+        '/home/azureuser/llm-embed/output3',
         ]
 
     for output_dir in output_dirs:
         scan_checkpoints(cfg, output_dir,
-                         pooling_mode='mean',
-                        #  pooling_mode='lasttoken',
+                        #  pooling_mode='mean',
+                         pooling_mode='lasttoken',
                         #  K=0, # use pre-set train/val split
                          )
         

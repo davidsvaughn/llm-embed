@@ -49,3 +49,22 @@ python siamese_train.py
 # multi-GPU
 torchrun --nproc_per_node 4 siamese_train.py
 ```
+
+test embedding model
+```
+# single GPU
+python siamese_test.py
+
+# multi-GPU
+torchrun --nproc_per_node 4 siamese_test.py
+```
+
+merge adapter model
+```
+python merge_adapter.py --checkpoint_dir output/checkpoint-2400
+```
+
+upload merged model
+```
+huggingface-cli upload davidsvaughn/phi4-math-lasttoken-1 output/model --private
+```

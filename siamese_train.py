@@ -75,8 +75,8 @@ class ScriptArguments:
     # model_id:       str             = field(default="microsoft/Phi-3-mini-128k-instruct", metadata={"help": "The HuggingFace model id"})
     # model_id:       str             = field(default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", metadata={"help": "The HuggingFace model id"})
     
-    dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
-    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
+    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
+    dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
     
     prompt_dir:     Optional[str]   = field(default="prompts", metadata={"help": "The prompt directory"})
     data_dir:       Optional[str]   = field(default='~/embed/data', metadata={"help": "The directory where the test data is stored"})
@@ -110,7 +110,10 @@ class ScriptArguments:
     margin:         Optional[float] = field(default=2.0, metadata={"help": "The margin to use in contrastive loss"})
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
-    pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
+    # pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
+    
+    # lm_loss_weight: Optional[float] = field(default=0.01, metadata={"help": "The language model loss weight"})
+    pooling_mode:   Optional[str]   = field(default="lasttoken", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     # debugging
     debug_level:    Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
@@ -258,10 +261,10 @@ if is_main():
     print(f"RANDOM SEED: {script_args.rand_seed}")
     print('-'*100)
     
-else:
-    print(f"RANDOM SEED: {script_args.rand_seed}")
-    # Synchronize all processes
-    dist.barrier()
+# else:
+#     print(f"RANDOM SEED: {script_args.rand_seed}")
+#     # Synchronize all processes
+#     dist.barrier()
 
 #--------------------------------------------------------------------------------------------------
 # Logging setup and random seed initialization
