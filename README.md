@@ -1,7 +1,7 @@
 # llm-embed
 Turn LLMs into embedding models. A framework for fine-tuning LLMs into high-performance embedding models using a novel hybrid objective function that combines siamese contrastive loss with causal language modeling loss. 
 
-setup
+## setup
 ```
 git clone https://github.com/davidsvaughn/llm-embed
 cd llm-embed
@@ -12,7 +12,7 @@ pip install flash-attn --no-build-isolation
 # pip install -e .
 ```
 
-exllamav2
+## install exllamav2
 ```
 git clone https://github.com/turboderp/exllamav2
 cd exllamav2
@@ -21,7 +21,7 @@ pip install -e .
 cd ..
 ```
 
-SentenceTransformers
+## install SentenceTransformers
 ```
 git clone https://github.com/UKPLab/sentence-transformers
 cd sentence-transformers
@@ -30,18 +30,20 @@ pre-commit install
 cd ..
 ```
 
-HF login
+## HuggingFace login
 ```
 huggingface-cli login --token $HUG_READ_TOKEN
 huggingface-cli login --token $HUG_WRITE_TOKEN
 ```
 
-wandb login
-```
-wandb login --cloud
-```
+## wandb login
+run `wandb login --cloud`
 
-fine-tune embedding model
+## pre-process data
+- put `[bw|fw|math]_[training|validation].json` files in `data/[bw|fw|math]` sub-directories
+- run `python preprocess_datasets.py`
+
+## fine-tune embedding model
 ```
 # single GPU
 python siamese_train.py

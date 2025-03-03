@@ -28,6 +28,7 @@ MANIFEST
 
 # Custom
 old/
+data/
 wandb/
 exllamav2/
 sentence-transformers/
