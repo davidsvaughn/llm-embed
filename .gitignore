@@ -27,11 +27,12 @@ share/python-wheels/
 MANIFEST
 
 # Custom
-old/
 data/
+models/
 wandb/
 exllamav2/
 sentence-transformers/
+old/
 output*/
 *.log
 

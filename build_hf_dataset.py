@@ -254,15 +254,15 @@ def make_hf_dataset():
     random.seed(hf_cfg.RAND_SEED)
     np.random.seed(hf_cfg.RAND_SEED)
     
-    root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/home/azureuser/llm-embed/prompts'
+    root_data_dir = '~/embed/data'
+    root_prompt_dir = 'prompts'
 
     #---------------------------------------------------------------------------------------------
     dataset_cfgs = []
     #-------------------------------------------------------
     # cfg = get_config('math',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  hh_min=0.64,
     #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
     #                  model_id='dan-siam-3', # for predictions
@@ -270,8 +270,8 @@ def make_hf_dataset():
     # dataset_cfgs.append(cfg)
     #-------------------------------------------------------
     cfg = get_config('bw',
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
+                     data_dir=root_data_dir,
+                     prompt_dir=root_prompt_dir,
                      hh_min=0.54,
                      filter_out_mult=hf_cfg.FILTER_OUT_MULT,
                      model_id='dan-bw',
@@ -279,8 +279,8 @@ def make_hf_dataset():
     dataset_cfgs.append(cfg)
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  trait='con', hh_min=0.6,
     #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
     #                  model_id='dan-bw',
@@ -288,8 +288,8 @@ def make_hf_dataset():
     # dataset_cfgs.append(cfg)
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  trait='org', # hh_min=0.75,
     #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
     #                  model_id='dan-bw',
@@ -297,8 +297,8 @@ def make_hf_dataset():
     # dataset_cfgs.append(cfg)
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  trait='dev', # hh_min=0.75,
     #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
     #                  model_id='dan-bw',
@@ -348,7 +348,6 @@ def make_hf_dataset():
 
     # save to hub
     hf_dataset.push_to_hub(f"davidsvaughn/{name}_pairs_{hf_cfg.RAND_SEED}", private=True)
-    # hf_dataset.push_to_hub(f"davidsvaughn/mixed_pairs_{hf_cfg.RAND_SEED}", private=True)
 
     print('Done.')
     

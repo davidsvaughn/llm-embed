@@ -10,5 +10,5 @@ python siamese_train.py --model_id $MODEL_ID --dataset_id $DATASET_ID --tokenize
 torchrun --nproc_per_node 4 siamese_train.py \
     --model_id $MODEL_ID \
     --dataset_id $DATASET_ID \
-    --pooling_mode lasttoken \
+    --pooling_mode mean \
     --lm_loss_weight 0.001

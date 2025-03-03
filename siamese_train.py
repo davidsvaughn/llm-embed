@@ -68,8 +68,6 @@ class ScriptArguments:
     # model_id:       str             = field(default="microsoft/Phi-3-mini-128k-instruct", metadata={"help": "The HuggingFace model id"})
     # model_id:       str             = field(default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", metadata={"help": "The HuggingFace model id"})
     
-    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
-    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
     # dataset_id:     str             = field(default="davidsvaughn/math_pairs_460", metadata={"help": "The HuggingFace dataset id"})
     dataset_id:     str             = field(default="davidsvaughn/math_pairs_1426", metadata={"help": "The HuggingFace dataset id"})
     
@@ -216,6 +214,8 @@ if 'fw' in script_args.dataset_id:
 
 if script_args.debug_level:
     training_args.logging_steps = 10
+    for k in test_items.keys():
+        test_items[k] = test_items[k][:1]
     
     if script_args.debug_level == 1:
         script_args.subsample_eval = 5000
@@ -609,8 +609,8 @@ class XGBEvalCallbackDDP(TrainerCallback):
             cfg = get_config(
                 item_type, 
                 items=item_list,
-                root_data_dir=data_dir,
-                root_prompt_dir=prompt_dir,
+                data_dir=data_dir,
+                prompt_dir=prompt_dir,
             )
             test_data[item_type] = load_items(cfg)
         self.test_data = test_data
@@ -674,7 +674,6 @@ def remove_files(file_paths):
         except Exception as e:
             print(f'Failed to delete "{file_path}". Reason: {e}')
 
-# ORIGINAL
 class SaveDeepSpeedPeftModelCallback(TrainerCallback):
     def __init__(self, trainer, save_steps=500):
         self.trainer = trainer
@@ -693,68 +692,6 @@ class SaveDeepSpeedPeftModelCallback(TrainerCallback):
                 
             self.trainer.accelerator.wait_for_everyone()
         return control
-    
-# class SaveDeepSpeedPeftModelCallback(TrainerCallback):
-#     def __init__(self, trainer, save_steps=500):
-#         self.trainer = trainer
-#         self.save_steps = save_steps
-
-#     def on_step_end(self, args, state, control, **kwargs):
-#         if (state.global_step) % self.save_steps == 0:
-#             self.trainer.accelerator.wait_for_everyone()
-            
-#             model = self.trainer.model_wrapped if hasattr(self.trainer, "model_wrapped") else self.trainer.model
-#             unwrapped_model = self.trainer.accelerator.unwrap_model(model)
-            
-#             if self.trainer.accelerator.is_main_process:
-#                 ckpt_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
-#                 # Use save_pretrained with safe_serialization=False to avoid the shared tensor issue
-#                 unwrapped_model.encoder.save_pretrained(
-#                     ckpt_dir, 
-#                     safe_serialization=False,  # Add this parameter to avoid safetensors issue
-#                     **kwargs
-#                 )
-                
-#             self.trainer.accelerator.wait_for_everyone()
-#         return control
-    
-# class SaveDeepSpeedPeftModelCallback(TrainerCallback):
-#     def __init__(self, trainer, save_steps=500):
-#         self.trainer = trainer
-#         self.save_steps = save_steps
-
-#     def on_step_end(self, args, state, control, **kwargs):
-#         if (state.global_step) % self.save_steps == 0:
-#             self.trainer.accelerator.wait_for_everyone()
-            
-#             model = self.trainer.model_wrapped if hasattr(self.trainer, "model_wrapped") else self.trainer.model
-#             unwrapped_model = self.trainer.accelerator.unwrap_model(model)
-            
-#             if self.trainer.accelerator.is_main_process:
-#                 ckpt_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
-                
-#                 # Get the base model
-#                 base_model = unwrapped_model.encoder.base_model.model
-                
-#                 # Check if weights are tied, and temporarily untie them
-#                 weights_tied = False
-#                 if hasattr(base_model, "model") and hasattr(base_model.model, "embed_tokens") and hasattr(base_model, "lm_head"):
-#                     if id(base_model.model.embed_tokens.weight) == id(base_model.lm_head.weight):
-#                         weights_tied = True
-#                         # Create a copy of lm_head weights
-#                         lm_head_weight_copy = base_model.lm_head.weight.clone()
-#                         # Replace with a new tensor
-#                         base_model.lm_head.weight = torch.nn.Parameter(lm_head_weight_copy)
-                
-#                 # Save the model
-#                 unwrapped_model.encoder.save_pretrained(ckpt_dir, **kwargs)
-                
-#                 # Restore tied weights if needed
-#                 if weights_tied:
-#                     base_model.lm_head.weight = base_model.model.embed_tokens.weight
-                
-#             self.trainer.accelerator.wait_for_everyone()
-#         return control
 
 # Hub upload tracking
 uploaded_checkpoints = set()
@@ -883,7 +820,3 @@ trainer.add_callback(SetEpochCallback(trainer))
 if __name__ == "__main__":
     # Begin training
     trainer.train()
-    
-    # # Save final model if needed
-    # if is_main():
-    #     print("Training completed. Final model saved to:", training_args.output_dir)

@@ -43,6 +43,12 @@ run `wandb login --cloud`
 - put `[bw|fw|math]_[training|validation].json` files in `data/[bw|fw|math]` sub-directories
 - run `python preprocess_datasets.py`
 
+### generate pairwise training dataset
+- generate predictions with weak model
+- generate pairwise dataset using predictions to estimate **hard pairs** (i.e. **hard negatives/positives**)
+1. download weak model
+2. generate predictions `torchrun --nproc_per_node 4 siamese_test.py --item-type bw gen --model-dir ~/models --model-id dan-bw`
+
 ### fine-tune embedding model
 ```
 # single GPU
@@ -55,10 +61,10 @@ torchrun --nproc_per_node 4 siamese_train.py
 ### test embedding model
 ```
 # single GPU
-python siamese_test.py
+python siamese_test.py --item-type math scan --model-dir output3 --items 123362,33082,13272,27218,29632,31600,52414,78382
 
 # multi-GPU
-torchrun --nproc_per_node 4 siamese_test.py
+torchrun --nproc_per_node 4 siamese_test.py --item-type math scan --model-dir output3 --items 123362,33082,13272,27218,29632,31600,52414,78382
 ```
 
 ### merge adapter model

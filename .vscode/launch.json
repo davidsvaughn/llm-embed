@@ -14,8 +14,19 @@
             "justMyCode": false,
 
             // "args": [
-            //     "--data-types", "bw",
-            //     "--data-dir", "data",
+            //     ///// siamese_test.py
+            //     // "scan",
+            //     // "--model-dir", "output4",
+            //     // "--items", "85656",
+            //     // "--min-num", "400",
+            //     // "--max-num", "800",
+            //     "gen",
+            //     "--model-dir", "~/models",
+            //     "--model-id", "dan-bw",
+            //     "--items", "85656",
+            //     //// preprocess_datasets.py
+            //     // "--data-types", "bw",
+            //     // "--data-dir", "data",
             // ]
         }
 

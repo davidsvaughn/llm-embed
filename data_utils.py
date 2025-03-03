@@ -216,17 +216,28 @@ def process_raw_data(item_type, root_data_dir, items_sub='items'):
             write_jsonl(f'{item_path}/{dst}.jsonl', records)
 
 #-------------------------------------------------------------------------------------
+def expand_user(path):
+    return os.path.expanduser(path) if '~' in path else path
 
-def get_base_config(item_type, hh_min=None, trait=None, **kwargs):
+def get_base_config(item_type,
+                    data_dir='data',
+                    # model_dir='models',
+                    # prompt_dir='prompts',
+                    batch_size=16,
+                    max_length=8192,
+                    padding_side='left',
+                    hh_min=None, 
+                    trait=None, 
+                    **kwargs):
     cfg = adict()
-
     cfg.item_type = item_type
-
-    root_dir = kwargs.get('root_data_dir', os.path.expanduser('~/data'))
-    src_dir = f'{root_dir}/{item_type}'
-    cfg.data_dir = f"{src_dir}/{kwargs.get('items_sub', 'items')}"
     
-    cfg.root_model_dir = kwargs.get('root_model_dir', os.path.expanduser('~/models'))
+    # if '~' in data_dir, expand to user's home directory
+    data_dir = expand_user(data_dir)
+    
+    # data_dir
+    src_dir = f'{data_dir}/{item_type}'
+    cfg.data_dir = f"{src_dir}/{kwargs.get('items_sub', 'items')}"
 
     # hh file
     hh_file = f'{src_dir}/hh.csv'
@@ -243,13 +254,18 @@ def get_base_config(item_type, hh_min=None, trait=None, **kwargs):
     if df is not None:
         cfg.item_to_hh = dict(zip(df['item'], df['qwk_hh']))
     
-    cfg.batch_size = kwargs.get('batch_size', 16)
-    cfg.max_length = kwargs.get('max_length', 8192)
-    cfg.padding_side = 'left'
+    cfg.batch_size = batch_size
+    cfg.max_length = max_length
+    cfg.padding_side = padding_side
 
     # add remaining kwargs to cfg as attributes... like model_id
     for k,v in kwargs.items():
         setattr(cfg, k, v)
+        
+    # expand all '~' in attribs ending with '_dir'
+    for k in cfg.keys():
+        if k.endswith('_dir'):
+            setattr(cfg, k, expand_user(getattr(cfg, k)))
         
     if 'items' not in cfg:
         cfg.hh_min = hh_min
@@ -258,8 +274,7 @@ def get_base_config(item_type, hh_min=None, trait=None, **kwargs):
             item = int(re.search(r'(\d+)', item_file).group(1))
             items.append(item)
         items.sort()
-        cfg['items'] = items
-        
+        cfg['items'] = items   
 
     return cfg
 
@@ -299,15 +314,15 @@ def get_config(item_type, trait=None, **kwargs):
     #     cfg['items'] = items
         
     # filter in items
-    if 'filter_in_mult' in cfg and 'items' in cfg:
+    if 'filter_in_mult' in cfg and 'items' in cfg and cfg.filter_in_mult is not None:
         cfg.items = [item for item in cfg.items if item % cfg.filter_in_mult == 0]
     
     # filter out items
-    if 'filter_out_mult' in cfg and 'items' in cfg:
+    if 'filter_out_mult' in cfg and 'items' in cfg and cfg.filter_out_mult is not None:
         cfg.items = [item for item in cfg.items if item % cfg.filter_out_mult != 0]
     
     # filter items by hh_min
-    if 'hh_min' in cfg and 'items' in cfg:
+    if 'hh_min' in cfg and 'items' in cfg and cfg.hh_min is not None:
         cfg.items = [item for item in cfg.items if cfg.item_to_hh[item] >= cfg.hh_min]
         
     if 'item_to_hh' in cfg:
@@ -319,9 +334,9 @@ def get_config(item_type, trait=None, **kwargs):
     # load tokenizer
     for id in 'model_id', 'tokenizer_id':
         if id in cfg:
-            # if has no '/' assume it's a local model and pre-pend root_model_dir
-            if '/' not in cfg[id]:
-                cfg[id] = f'{cfg.root_model_dir}/{cfg[id]}'
+            # if has no '/' assume it's a local model and pre-pend model_dir
+            if '/' not in cfg[id] and 'model_dir' in cfg:
+                cfg[id] = f'{cfg.model_dir}/{cfg[id]}'
             
     if 'model_id' in cfg and 'tokenize' in cfg and cfg.tokenize and 'tokenizer_id' not in cfg:
         cfg.tokenizer_id = cfg.model_id
@@ -337,8 +352,8 @@ def get_config(item_type, trait=None, **kwargs):
     #-----------------------------------------------------------
     
     # prompt related fields
-    if 'root_prompt_dir' in cfg:
-        cfg.prompt_dir = os.path.join(cfg.root_prompt_dir, cfg.item_type)
+    if 'prompt_dir' in cfg:
+        cfg.prompt_dir = os.path.join(cfg.prompt_dir, cfg.item_type)
         # truncation used for embedding models : see PromptBuilder
         cfg.truncate_to = 'score'
         
@@ -449,8 +464,8 @@ def test_load_items():
     #-------------------------------------------------------------------
     # Get config for each item type
     cfg = get_config('bw',
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
+                     data_dir=root_data_dir,
+                     prompt_dir=root_prompt_dir,
                      filter_out_mult=2, # i.e. load only ODD items
                      model_id='dan-bw',
                     #  hh_min=0.58,
@@ -458,15 +473,15 @@ def test_load_items():
                      )
     
     # cfg = get_config('fw', trait='dev',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  filter_out_mult=2, # i.e. load only ODD items
     #                 #  model_id='dan-bw',
     #                  )
     
     # cfg = get_config('math',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
+    #                  data_dir=root_data_dir,
+    #                  prompt_dir=root_prompt_dir,
     #                  filter_out_mult=2, # i.e. load only ODD items
     #                  model_id='dan-siam-3',
     #                  )

@@ -3,6 +3,7 @@ import sys
 import torch
 import time
 import traceback
+import argparse
 from glob import glob
 from sentence_transformers import SentenceTransformer, models
 
@@ -19,50 +20,38 @@ from embedder.sent_trans import SentenceTransformerEmbedder
 '''
 For DDP mode - Run this script with the following command:
 
-    torchrun --nproc_per_node 4 inference.py
+    torchrun --nproc_per_node 4 siamese_test.py --scan
 
+Or to generate predictions:
+
+    python siamese_test.py --gen --overwrite --debug
 '''
 #---------------------------------------------------------------------------------------    
 
 # save predictions for all items - useful for building "hard pairs" dataset for siamese model
-def save_predictions(overwrite=False, debug=False):
-    root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
+def generate_predictions(args):
+    overwrite = args.overwrite
+    debug = args.debug
+    items = [int(it.strip()) for it in args.items.split(",")] if args.items else None
     
     #-----------------------------------------------------------------------------
     # Get config for each item type
-    cfg = get_config('bw',
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
-                     filter_out_mult=2,
-                     model_id='dan-bw',
-                    #  model_id='llama-siam-3-exl2-q4',
-                     extract_state_indices=[41, 48, 57],
-                    #  K=0,
-                     )
+    cfg = get_config(args.item_type,
+                     data_dir=args.data_dir,
+                     prompt_dir=args.prompt_dir,
+                     model_dir=args.model_dir,
+                     model_id=args.model_id,
+                     items=items,
+                     filter_out_mult=args.filter_out_mult if not args.items else None,
+                     extract_state_indices=args.extract_state_indices if args.extract_state_indices else None,
+                    )
     
-    # cfg = get_config('fw', trait='dev', # dev , org , con
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
-    #                  filter_out_mult=2,
-    #                  model_id='dan-bw', 
-    #                  )
-    
-    # cfg = get_config('math',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
-    #                  filter_out_mult=2,
-    #                  model_id='dan-siam-3',
-    #                  )
-    #-----------------------------------------------------------------------------
-
     # load items (debug mode only loads a subset of items)
     data_by_item = load_items(cfg, debug=debug)
 
     #-----------------------------------------------------------------------------
 
     # load HF model and tokenizer
-    # model = load_model(cfg)
     embedder = EmbedderFactory(cfg)
     
     #-----------------------------------------------------------------------------
@@ -70,7 +59,6 @@ def save_predictions(overwrite=False, debug=False):
     for i, (item, records) in enumerate(data_by_item.items()):
         printmain(f"\nProcessing item: {item} ({i+1}/{len(data_by_item)})")
 
-        # item_path = cfg.item_path_fmt.format(item=item)
         preds_file = cfg.preds_file_fmt.format(item=item)
         preds_dir = os.path.dirname(preds_file)
         mkdirs(preds_dir)
@@ -94,24 +82,33 @@ def save_predictions(overwrite=False, debug=False):
 #------------------------------------------------------------------------------
 
 # output_dir contains multiple checkpoint directories
-def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=None, pooling_mode='mean'):
-
-    #------------------------------------------------------------------------------
-    # min/max checkpoint numbers
-    # min_num, max_num = 1100, 2750
-    #------------------------------------------------------------------------------
-    # output_dir = '/home/azureuser/embed/output2'
-    filters = [2250, ]#4400, 2400, 2050, 3300] # 2150 2250
-    #------------------------------------------------------------------------------
+def scan_checkpoints(args):
+    min_num = args.min_num
+    max_num = args.max_num
+    filters = args.filters
+    pooling_mode = args.pooling_mode
+    K = args.K
+    items = [int(it.strip()) for it in args.items.split(",")] if args.items else None
+    
+    # Get config for each item type
+    cfg = get_config(args.item_type,
+                    random_state=args.random_state,
+                    data_dir=args.data_dir,
+                    prompt_dir=args.prompt_dir,
+                    model_dir=args.model_dir,
+                    items=items,
+                    filter_in_mult=args.filter_in_mult if not args.items else None,
+                    hh_min=args.hh_min if not args.items else None,
+                    )
 
     # get checkpoint directories
-    checkpoint_dirs = glob(output_dir + '/checkpoint-*')
+    checkpoint_dirs = glob(args.model_dir + '/checkpoint-*')
     checkpoint_dirs = [d for d in checkpoint_dirs if int(d.split('-')[-1]) >= min_num and int(d.split('-')[-1]) <= max_num]
     checkpoint_dirs.sort(key=lambda x: int(x.split('-')[-1]))
 
     if filters is not None:
         checkpoint_nums = [int(d.split('-')[-1]) for d in checkpoint_dirs]
-        checkpoint_dirs = [checkpoint_dirs[checkpoint_nums.index(n)] for n in filters]
+        checkpoint_dirs = [d for d in checkpoint_dirs if int(d.split('-')[-1]) in filters]
     else:
         checkpoint_dirs = tricky_traversal_order(checkpoint_dirs)
 
@@ -119,12 +116,10 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
     if len(checkpoint_dirs) > 10:
         checkpoint_dirs = checkpoint_dirs[2:] + checkpoint_dirs[:2]
 
-    # resume from checkpoint 13...
-    # checkpoint_dirs = checkpoint_dirs[13:]
     #------------------------------------------------------------------------------
 
     # load test items
-    data_by_item = load_items(cfg)#, debug=15)
+    data_by_item = load_items(cfg, debug=args.debug)
 
     # loop through checkpoints
     results = []
@@ -133,12 +128,11 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
         printmain(f"\nRunning checkpoint: {checkpoint_dir}")
         start = time.time()
         
-        # model = load_model(model_id=checkpoint_dir)
         embedder = EmbedderFactory(model_id=checkpoint_dir)
         
         qwks = run_xgb_on_items(embedder, data_by_item, K=K,
                                 pooling_mode=pooling_mode,
-                                random_state=cfg.get('random_state', 42),
+                                random_state=cfg.get('random_state', args.random_state),
                                 )
         
         if qwks is not None:
@@ -151,7 +145,7 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
             results.sort(key=lambda x: int(x.split('\t')[0].split('-')[-1]))
             
             print('\n' + '-'*40)
-            print(f'{output_dir}')
+            print(f'{args.model_dir}')
             for r in results:
                 print(r)
             print('-'*40 + '\n')
@@ -165,236 +159,64 @@ def scan_checkpoints(cfg, output_dir, min_num=0, max_num=10000000, K=5, filters=
     if is_main():
         print("Done")
 
-def test_checkpoints():
-    
-    root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/home/azureuser/llm-embed/prompts'
-    
-    #-----------------------------------------------------------------------------
-    # Get config for each item type
-    cfg = get_config('math',
-                     random_state=42,
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
-                     items = [123362, 33082, 13272, 27218, 29632, 31600, 52414, 78382], # standard math test set
-                     filter_in_mult=2, hh_min=0.6,
-                     )
-    
-    # cfg = get_config('bw',
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
-    #                  items = [58151, 58155, 58425, 58587, 58937, 59181, 61047, 90881, 94225, 94237],
-    #                  )
-    
-    # cfg = get_config('fw', trait='dev', # dev , org , con
-    #                  root_data_dir=root_data_dir,
-    #                  root_prompt_dir=root_prompt_dir,
-    #                  )
-    
-    #-----------------------------------------------------------------------------
-    
-    # each output_dir should contain multiple checkpoint directories
-    output_dirs = [
-        # '/home/azureuser/llm-embed/output1',
-        # '/home/azureuser/llm-embed/output2',
-        '/home/azureuser/llm-embed/output3',
-        ]
-
-    for output_dir in output_dirs:
-        scan_checkpoints(cfg, output_dir,
-                        #  pooling_mode='mean',
-                         pooling_mode='lasttoken',
-                        #  K=0, # use pre-set train/val split
-                         )
-        
-#------------------------------------------------------------------------------
-
-# output_dir contains multiple checkpoint directories
-def test_st_checkpoint():
-    
-    root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
-    
-    # Get config for math
-    cfg = get_config('math',
-                     batch_size=16,
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
-                     items = [123362, 33082, 13272, 27218, 29632, 31600, 52414, 78382]
-                     )
-    # load test items
-    data_by_item = load_items(cfg)
-    
-    #------------------------------------------------------------------------------
-    # load SentenceTransformer model
-    st_root = "/home/azureuser/embed/st/output/"
-    
-    #------------------------------------------------------------------------------
-    # st_run = 'training_math_pairs_279_Salesforce-SFR-Embedding-Mistral_2025-02-13_07-53-43'
-    # chkpt_num = 5000 # 2500  3200  5000
-    # model_path = st_root + st_run + f'/checkpoint-{chkpt_num}'
-    # embedder = EmbedderFactory(model_id=model_path, model_type='st')
-    #------------------------------------------------------------------------------
-    
-    st_run = 'training_math_pairs_279_meta-llama-Llama-3.2-3B-Instruct_2025-02-13_19-44-43'
-    chkpt_num = 3200
-    model_path = st_root + st_run + f'/checkpoint-{chkpt_num}'
-    # embedder = EmbedderFactory(model_id=model_path, model_type='st')
-    
-    st_model = SentenceTransformer(model_path)
-    transformer_module = st_model[0]
-    hf_model = transformer_module.auto_model
-    hf_tokenizer = transformer_module.tokenizer
-    embedder = HuggingfaceEmbedder(model=hf_model, 
-                                   tokenizer=hf_tokenizer, 
-                                   pooling_mode="mean", 
-                                #    padding_side="right",
-                                   )
-    # TODO: pooling_mode --> pooling_mode
-    
-    #------------------------------------------------------------------------------
-    qwks = run_xgb_on_items(embedder, data_by_item)
-    
-    if qwks is not None:
-        qwk = qwks.mean()
-        print(f'QWK: {qwk:.4f} {qwks}')
-        
-    print("Done")
-
-#------------------------------------------------------------------------------
-
-# convert an HF CausalLanguageModel to a SentenceTransformer model
-def clm2st(clm_model_id,
-           pooling_mode="mean", # mean, lasttoken
-           ):
-    """
-    Converts a causal language model (CLM) into a SentenceTransformer model.
-    
-    This function creates a SentenceTransformer model from a specified causal 
-    language model by combining it with a pooling layer. The resulting model
-    can be used for generating sentence embeddings.
-    
-    Parameters:
-    -----------
-    clm_model_id : str
-        The identifier of the causal language model to be converted.
-        This should be a model ID that can be loaded by the Transformer class.
-        
-    pooling_mode : str, default="mean"
-        The pooling mode to use for generating sentence embeddings.
-        Options include:
-        - "mean": Average all token embeddings
-        - "lasttoken": Use only the last token's embedding
-    
-    Returns:
-    --------
-    SentenceTransformer
-        A SentenceTransformer model that combines the specified causal language 
-        model with a pooling layer, configured to generate sentence embeddings.
-        The model's tokenizer is configured with pad_token set to eos_token.
-    """
-    word_embedding_model = models.Transformer(
-        clm_model_id, 
-    )
-    # pooling_mode: mean, lasttoken, cls, max, mean_sqrt_len_tokens, weightedmean
-    # see: /home/azureuser/embed/sentence-transformers/sentence_transformers/models/Pooling.py
-    pooling_model = models.Pooling(
-        word_embedding_model.get_word_embedding_dimension(),
-        pooling_mode=pooling_mode,
-    )
-    # build the SentenceTransformer pipeline
-    st_model = SentenceTransformer(
-        modules=[word_embedding_model, pooling_model]
-    )
-    # set the st_model's tokenizer's pad token to eos token
-    st_model.tokenizer.pad_token = st_model.tokenizer.eos_token
-    return st_model
-
-
-def compare_st_checkpoint():
-    
-    root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
-    
-    # Get config for math
-    cfg = get_config('math',
-                     batch_size=16,
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
-                     items = [123362],
-                    #  items = [123362, 33082, 13272, 27218, 29632, 31600, 52414, 78382]
-                     )
-    # load test items
-    data_by_item = load_items(cfg)
-    
-    #------------------------------------------------------------------------------
-    # python merge_checkpoint.py --checkpoint_dir /home/azureuser/embed/output6/checkpoint-1700
-    model_path = '/home/azureuser/embed/output6/model'
-    
-    # location of HF adapter model
-    # hf_root = '/home/azureuser/embed/output6'
-    # chkpt_num = 1700
-    # model_path = hf_root + f'/checkpoint-{chkpt_num}'
-    
-    # 1 - load as HF model
-    embedder = EmbedderFactory(model_id=model_path, model_type='hf')
-    
-    # 2 - load as SentenceTransformer model
-    # hf_model = load_checkpoint_model(model_path)
-    
-    # st_model = clm2st(model_path, pooling_mode="mean")
-    # embedder = SentenceTransformerEmbedder(model=st_model)
-    
-    #------------------------------------------------------------------------------
-    # load SentenceTransformer model
-    # st_root = "/home/azureuser/embed/st/output/"
-    
-    # #------------------------------------------------------------------------------
-    # # st_run = 'training_math_pairs_279_Salesforce-SFR-Embedding-Mistral_2025-02-13_07-53-43'
-    # # chkpt_num = 5000 # 2500  3200  5000
-    # # model_path = st_root + st_run + f'/checkpoint-{chkpt_num}'
-    # # embedder = EmbedderFactory(model_id=model_path, model_type='st')
-    # #------------------------------------------------------------------------------
-    
-    # st_run = 'training_math_pairs_279_meta-llama-Llama-3.2-3B-Instruct_2025-02-13_19-44-43'
-    # chkpt_num = 3200
-    # model_path = st_root + st_run + f'/checkpoint-{chkpt_num}'
-    # # embedder = EmbedderFactory(model_id=model_path, model_type='st')
-    
-    # st_model = SentenceTransformer(model_path)
-    # transformer_module = st_model[0]
-    # hf_model = transformer_module.auto_model
-    # hf_tokenizer = transformer_module.tokenizer
-    # embedder = HuggingfaceEmbedder(model=hf_model, 
-    #                                tokenizer=hf_tokenizer, 
-    #                                pooling_mode="mean", 
-    #                             #    padding_side="right",)
-    
-    
-    #------------------------------------------------------------------------------
-    
-    qwks = run_xgb_on_items(embedder, data_by_item, 
-                            padding_side="left",
-                            pooling_mode="mean")
-    
-    if qwks is not None:
-        qwk = qwks.mean()
-        print(f'QWK: {qwk:.4f} {qwks}')
-        
-    print("Done")
-
 #------------------------------------------------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(description='Siamese model testing and prediction generation')
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    
+    # Common arguments
+    parser.add_argument('--data-dir', default='data', help='Root data directory')
+    parser.add_argument('--prompt-dir', default='prompts', help='Root prompt directory')
+    parser.add_argument('--item-type', default='bw', choices=['bw', 'fw', 'math'], help='Item type')
+    parser.add_argument('--pooling-mode', default='mean', choices=['mean', 'lasttoken'], help='Pooling mode')
+    parser.add_argument('--random-state', type=int, default=42, help='Random state for reproducibility')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode with limited items')
+    
+    # Generate predictions command
+    gen_parser = subparsers.add_parser('gen', help='Generate predictions')
+    gen_parser.add_argument('--overwrite', action='store_true', help='Overwrite existing predictions')
+    gen_parser.add_argument('--model-dir', default='models', help='Directory containing downloaded models')
+    gen_parser.add_argument('--model-id', default='dan-bw', help='Path to model')
+    gen_parser.add_argument('--filter-out-mult', type=int, default=2, help='Filter out multiplier')
+    gen_parser.add_argument('--extract-state-indices', type=int, nargs='+', help='State indices to extract')
+    gen_parser.add_argument('--items', type=str, default='', help='Comma separated list of items')
+    
+    # Scan checkpoints command
+    scan_parser = subparsers.add_parser('scan', help='Scan checkpoints')
+    scan_parser.add_argument('--model-dir', default='output', help='Directory containing model checkpoints')
+    scan_parser.add_argument('--min-num', type=int, default=0, help='Minimum checkpoint number')
+    scan_parser.add_argument('--max-num', type=int, default=10000000, help='Maximum checkpoint number')
+    scan_parser.add_argument('--K', type=int, default=5, help='Number of folds for cross-validation')
+    scan_parser.add_argument('--filters', type=int, nargs='+', help='Specific checkpoint numbers to evaluate')
+    # scan_parser.add_argument('--pooling_mode', default='mean', choices=['mean', 'lasttoken'], help='Pooling mode')
+    scan_parser.add_argument('--filter-in-mult', type=int, default=2, help='Filter in multiplier')
+    scan_parser.add_argument('--hh-min', type=float, default=0.6, help='Minimum human-human agreement')
+    scan_parser.add_argument('--items', type=str, default='', help='Comma separated list of items')
+    
+    # For backward compatibility, also support --gen and --scan flags
+    parser.add_argument('--gen', action='store_true', help='Generate predictions (legacy flag)')
+    parser.add_argument('--scan', action='store_true', help='Scan checkpoints (legacy flag)')
+    
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    #------------------------------------------------------------------------------
-    ''' save predictions for all items - to be used for building "hard pairs" dataset for siamese model '''
-    # save_predictions(overwrite=True, debug=False)
+    args = parse_args()
     
-    #------------------------------------------------------------------------------\
-    ''' run xgb on items for each checkpoint '''
-    test_checkpoints()
+    # Handle legacy flags for backward compatibility
+    if args.gen:
+        args.command = 'gen'
+    elif args.scan:
+        args.command = 'scan'
     
-    #------------------------------------------------------------------------------\
-    ''' test xgb on SentenceTransformer checkpoint '''
-    # test_st_checkpoint()
-    
-    # compare_st_checkpoint()
+    if args.command == 'gen':
+        generate_predictions(args)
+    elif args.command == 'scan':
+        scan_checkpoints(args)
+    else:
+        print("Please specify either 'gen' or 'scan' command")
+        print("Example: python siamese_test.py gen --overwrite")
+        print("      or python siamese_test.py scan --filters 2250")
+        # # For backward compatibility
+        # print("Legacy usage: python siamese_test.py --gen --overwrite")
+        # print("         or: python siamese_test.py --scan")
+        sys.exit(1)
