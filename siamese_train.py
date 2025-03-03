@@ -56,16 +56,9 @@ from siamese_model import (
 # - can be run with no cmd line arguments, or with any of the following
 # - all arguments are logged to wandb
 
-# Standard approach (already used)
-# cur_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Alternative using pathlib (more modern, object-oriented)
-# cur_dir = Path(__file__).parent.absolute()
-
 # If you want the absolute path as string
 cur_dir = str(Path(__file__).parent.absolute())
 deepspeed_dir = os.path.join(cur_dir, 'deepspeed')
-
 
 @dataclass
 class ScriptArguments:
@@ -76,7 +69,9 @@ class ScriptArguments:
     # model_id:       str             = field(default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", metadata={"help": "The HuggingFace model id"})
     
     # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_460"], metadata={"help": "The HuggingFace dataset id"})
-    dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
+    # dataset_id:     List[str]       = field(default_factory=lambda: ["davidsvaughn/math_pairs_1426"], metadata={"help": "The HuggingFace dataset id"})
+    # dataset_id:     str             = field(default="davidsvaughn/math_pairs_460", metadata={"help": "The HuggingFace dataset id"})
+    dataset_id:     str             = field(default="davidsvaughn/math_pairs_1426", metadata={"help": "The HuggingFace dataset id"})
     
     prompt_dir:     Optional[str]   = field(default="prompts", metadata={"help": "The prompt directory"})
     data_dir:       Optional[str]   = field(default='~/embed/data', metadata={"help": "The directory where the test data is stored"})
@@ -110,10 +105,10 @@ class ScriptArguments:
     margin:         Optional[float] = field(default=2.0, metadata={"help": "The margin to use in contrastive loss"})
     margin_mult:    Optional[float] = field(default=1.0, metadata={"help": "The margin multiplier to use in contrastive loss"})
     lm_loss_weight: Optional[float] = field(default=0.001, metadata={"help": "The language model loss weight"})
-    # pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
+    pooling_mode:   Optional[str]   = field(default="mean", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     # lm_loss_weight: Optional[float] = field(default=0.01, metadata={"help": "The language model loss weight"})
-    pooling_mode:   Optional[str]   = field(default="lasttoken", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
+    # pooling_mode:   Optional[str]   = field(default="lasttoken", metadata={"help": "The pooling mode to use"})   # mean | lasttoken
     
     # debugging
     debug_level:    Optional[int]   = field(default=0, metadata={"help": "The debug level to use (0-4)"})
@@ -173,7 +168,18 @@ if is_main():
 for k in ['prompt_dir', 'data_dir']:
     if getattr(script_args, k) is not None:
         setattr(script_args, k, os.path.expanduser(getattr(script_args, k)))
-        
+
+# Create or increment output directory
+prefix = output_dir = training_args.output_dir; i=0
+while os.path.exists(output_dir) and os.listdir(output_dir):
+    i+=1
+    output_dir = f"{prefix}{i}"
+for k in vars(training_args):
+    if isinstance(getattr(training_args, k), str):
+        setattr(training_args, k, getattr(training_args, k).replace(prefix, output_dir))
+if is_main():
+    os.makedirs(training_args.output_dir, exist_ok=True)
+    
 # if rand_seed<0, set it to a random value, making sure all processes use the same seed
 if script_args.rand_seed < 0:
     if is_main():
@@ -192,16 +198,16 @@ script_args = ScriptArguments(**vars(script_args))  # Cast namespace to dataclas
 
 # Test item IDs for different datasets
 math_items = [123362, 29632]
-bw_items = [33234]
+bw_items = [33234, 63166, 96340]
 fw_items = [57236]
 
 # Select test items based on dataset
 test_items = {}
-if 'math' in script_args.dataset_id[0]:
+if 'math' in script_args.dataset_id:
     test_items['math'] = math_items
-if 'bw' in script_args.dataset_id[0]:
+if 'bw' in script_args.dataset_id:
     test_items['bw'] = bw_items
-if 'fw' in script_args.dataset_id[0]:
+if 'fw' in script_args.dataset_id:
     test_items['fw'] = fw_items
 
 
@@ -228,7 +234,6 @@ if script_args.debug_level:
         script_args.subsample_eval = 500
         training_args.eval_steps = 20
         training_args.save_steps = training_args.eval_steps
-        test_items = {'math': [123362]}
     elif script_args.debug_level == 4:
         training_args.gradient_accumulation_steps = 2
         script_args.max_samples = 5000
@@ -236,7 +241,6 @@ if script_args.debug_level:
         script_args.subsample_eval = 100
         training_args.eval_steps = 300
         training_args.save_steps = training_args.eval_steps         
-        test_items = {'math': [123362]}
                     
 #---------------------------------------------------------------------------------------
 
@@ -251,12 +255,12 @@ if is_main():
     for key, value in asdict(script_args).items():
         print(f"{key}: {value}")
 
-    # Create or increment output directory
-    i, prefix = 0, training_args.output_dir
-    while os.path.exists(training_args.output_dir) and os.listdir(training_args.output_dir):
-        i+=1
-        training_args.output_dir = f"{prefix}{i}"
-    os.makedirs(training_args.output_dir, exist_ok=True)
+    # # Create or increment output directory
+    # i, prefix = 0, training_args.output_dir
+    # while os.path.exists(training_args.output_dir) and os.listdir(training_args.output_dir):
+    #     i+=1
+    #     training_args.output_dir = f"{prefix}{i}"
+    # os.makedirs(training_args.output_dir, exist_ok=True)
     print(f"OUTPUT DIRECTORY: {training_args.output_dir}")
     print(f"RANDOM SEED: {script_args.rand_seed}")
     print('-'*100)
@@ -281,7 +285,7 @@ def make_json_serializable(d):
 
 # Initialize wandb logging
 if is_main() and not script_args.tokenize_only:
-    wandb.init(project= f"Embedding-LLM--{script_args.dataset_id[0].replace('/','_')}")
+    wandb.init(project= f"Embedding-LLM--{script_args.dataset_id.replace('/','_')}")
     wandb.config.update(make_json_serializable(asdict(training_args)))
     wandb.config.update(make_json_serializable(asdict(script_args)))
     wandb_run_name = wandb.run.name
@@ -313,7 +317,7 @@ def prepare_dataset(tokenizer, args):
     print(f"\nBuilding dataset...")
 
     # Load dataset from HuggingFace hub
-    dataset = load_dataset(*args.dataset_id)
+    dataset = load_dataset(args.dataset_id)
 
     # Shuffle dataset
     dataset = dataset.shuffle(seed=args.rand_seed)
@@ -378,11 +382,11 @@ def prepare_dataset(tokenizer, args):
 
 # Load or create tokenized dataset
 def load_or_prepare_dataset(tokenizer, args):
-    dataset_tag = args.dataset_id[0]
+    dataset_tag = args.dataset_id
     dataset_tag = dataset_tag.replace("davidsvaughn/", "").replace("/", "_")
     model_tag = args.model_id.split('/')[-1]
-    data_tag = f'{dataset_tag}_{model_tag}_tokenized'
-    hf_dataset_id = f"davidsvaughn/{data_tag}"
+    tokenized_data_tag = f'{dataset_tag}_{model_tag}_tokenized'
+    hf_dataset_id = f"davidsvaughn/{tokenized_data_tag}"
     
     # Check if dataset already exists
     if check_dataset_exists(hf_dataset_id):

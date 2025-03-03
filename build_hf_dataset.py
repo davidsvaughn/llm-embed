@@ -242,7 +242,7 @@ def make_hf_dataset():
         'EASY_MAX_VALID': 0,
         'EASY_PROB_TRAIN': 0.01,
         'EASY_PROB_VALID': 0.01,
-        'SPLIT_VALID': 0.055,
+        'SPLIT_VALID': 0.05,
         'BLACKLIST': [(0,0)],
         
         'RAND_SEED': random.randint(1000, 10000),
@@ -255,28 +255,28 @@ def make_hf_dataset():
     np.random.seed(hf_cfg.RAND_SEED)
     
     root_data_dir = '/home/azureuser/embed/data'
-    root_prompt_dir = '/mnt/llm-train/embed/simple/prompts'
+    root_prompt_dir = '/home/azureuser/llm-embed/prompts'
 
     #---------------------------------------------------------------------------------------------
     dataset_cfgs = []
     #-------------------------------------------------------
-    cfg = get_config('math',
-                     root_data_dir=root_data_dir,
-                     root_prompt_dir=root_prompt_dir,
-                     hh_min=0.64,
-                     filter_out_mult=hf_cfg.FILTER_OUT_MULT,
-                     model_id='dan-siam-3', # for predictions
-                     )
-    dataset_cfgs.append(cfg)
-    #-------------------------------------------------------
-    # cfg = get_config('bw',
+    # cfg = get_config('math',
     #                  root_data_dir=root_data_dir,
     #                  root_prompt_dir=root_prompt_dir,
-    #                  hh_min=0.55,
+    #                  hh_min=0.64,
     #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
-    #                  model_id='dan-bw',
+    #                  model_id='dan-siam-3', # for predictions
     #                  )
     # dataset_cfgs.append(cfg)
+    #-------------------------------------------------------
+    cfg = get_config('bw',
+                     root_data_dir=root_data_dir,
+                     root_prompt_dir=root_prompt_dir,
+                     hh_min=0.54,
+                     filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+                     model_id='dan-bw',
+                     )
+    dataset_cfgs.append(cfg)
     # #-------------------------------------------------------
     # cfg = get_config('fw',
     #                  root_data_dir=root_data_dir,
@@ -344,7 +344,7 @@ def make_hf_dataset():
     # make hf dataset
     valid_dataset = dictlist_to_dataset(valid_data)
     train_dataset = dictlist_to_dataset(train_data)
-    hf_dataset = DatasetDict({'train': train_dataset, 'validation': valid_dataset})#.save_to_disk('/home/azureuser/embed/data/math/hf')
+    hf_dataset = DatasetDict({'train': train_dataset, 'validation': valid_dataset})
 
     # save to hub
     hf_dataset.push_to_hub(f"davidsvaughn/{name}_pairs_{hf_cfg.RAND_SEED}", private=True)
