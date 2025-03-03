@@ -188,7 +188,6 @@ def parse_args():
     scan_parser.add_argument('--max-num', type=int, default=10000000, help='Maximum checkpoint number')
     scan_parser.add_argument('--K', type=int, default=5, help='Number of folds for cross-validation')
     scan_parser.add_argument('--filters', type=int, nargs='+', help='Specific checkpoint numbers to evaluate')
-    # scan_parser.add_argument('--pooling_mode', default='mean', choices=['mean', 'lasttoken'], help='Pooling mode')
     scan_parser.add_argument('--filter-in-mult', type=int, default=2, help='Filter in multiplier')
     scan_parser.add_argument('--hh-min', type=float, default=0.6, help='Minimum human-human agreement')
     scan_parser.add_argument('--items', type=str, default='', help='Comma separated list of items')
