@@ -222,14 +222,40 @@ class ExLlamaV2Embedder(Embedder):
     # some of this copied from: exllamav2/test_inference.py 
     def __init__(self, max_seq_len=8192, batch_size=16, **cfg):
         super().__init__(to_adict(cfg))
-        parser = argparse.ArgumentParser(description = "Test inference on ExLlamaV2 model")
-        parser.add_argument("-er", "--eval_rows", type = int, default = 128, help = "Number of rows to apply from dataset")
-        parser.add_argument("-el", "--eval_length", type = int, default = 4096, help = "Max no. tokens per sample")
-        parser.add_argument("-pnb", "--prompt_no_bos", action = "store_true", help = "Don't add BOS token to prompt")
-        parser.add_argument("-t", "--tokens", type = int, default = 128, help = "Max no. tokens")
-        parser.add_argument("-nwu", "--no_warmup", action = "store_true", help = "Skip warmup before testing model")
+        
+        
+        #------------------------------------------------------------------------------
+        # ## old code
+        # parser = argparse.ArgumentParser(description = "Test inference on ExLlamaV2 model")
+        # parser.add_argument("-er", "--eval_rows", type = int, default = 128, help = "Number of rows to apply from dataset")
+        # parser.add_argument("-el", "--eval_length", type = int, default = 4096, help = "Max no. tokens per sample")
+        # parser.add_argument("-pnb", "--prompt_no_bos", action = "store_true", help = "Don't add BOS token to prompt")
+        # parser.add_argument("-t", "--tokens", type = int, default = 128, help = "Max no. tokens")
+        # parser.add_argument("-nwu", "--no_warmup", action = "store_true", help = "Skip warmup before testing model")
+        # model_init.add_args(parser)
+        # args = parser.parse_args()
+        #------------------------------------------------------------------------------
+        # new code
+        args = argparse.Namespace()
+        args.eval_rows = 128
+        args.eval_length = 4096
+        args.prompt_no_bos = False
+        args.no_warmup = False
+        args.tokens = 128
+
+        # Add default model_init arguments
+        parser = argparse.ArgumentParser()
         model_init.add_args(parser)
-        self.args = args = parser.parse_args()
+        default_args = parser.parse_args([])  # Empty list to avoid parsing actual command line args
+        for key, value in vars(default_args).items():
+            setattr(args, key, value)
+
+        # Override with any model-specific config from self.cfg
+        if hasattr(self.cfg, 'model_args'):
+            for key, value in self.cfg.model_args.items():
+                setattr(args, key, value)
+        #------------------------------------------------------------------------------
+        
         args.model_dir = self.model_id
         model_init.check_args(args)
 

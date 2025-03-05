@@ -85,10 +85,10 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
         
         print(f"Time to run XGBoost for item {item}: {time.time()-xgb_start:.2f} seconds")
         print(f"Total time for item {item}: {time.time()-item_start:.2f} seconds")
-        # print(f"QWK = {qwk:.4f}")
         
         # save K-fold predictions for entire dataset
         if preds_file and K>1:
+            # print(f"QWK = {qwk:.4f}")
             preds_table = np.column_stack((idx, y, y_pred.round().astype(int)))
             # sort table by first column
             preds_table = preds_table[preds_table[:,0].argsort()]
@@ -121,21 +121,38 @@ def run_xgb_on_items(embedder, data_by_item, **kwargs):
     Returns:
         numpy.ndarray or None: Array of quadratic weighted kappa scores rounded to 4 decimal places 
         for each successfully processed item if running in main process, None otherwise.
+        Returns None if processing is interrupted by KeyboardInterrupt (Ctrl+C).
     Notes:
         - Processes items sequentially and collects QWK scores for each item
         - Prints progress updates when running in main process
-        - Skips items that return None QWK scores
+        - only main process (rank0) returns the array of QWK scores
+        - Gracefully handles Ctrl+C interruptions
     """
-    qwks = []
-    for i, (item, records) in enumerate(data_by_item.items()):
-        if is_main():
-            print(f"\nProcessing item: {item} ({i+1}/{len(data_by_item)})")
-        
-        qwk = run_xgb_on_item(embedder, item, records, **kwargs)
-        if qwk is not None:
-            qwks.append(qwk)
 
-    if is_main():
-        return np.array(qwks).round(4)
-    else:
+    # use random_state to generate a sequence of random states, one for each item
+    random_state = kwargs.pop('random_state', 42)
+    random_states = np.random.RandomState(random_state).randint(0, 2**32-1, len(data_by_item))
+    
+    try:
+        qwks = []
+        for i, (item, records) in enumerate(data_by_item.items()):
+            if is_main():
+                print(f"\nProcessing item: {item} ({i+1}/{len(data_by_item)})")
+            
+            qwk = run_xgb_on_item(embedder, 
+                                  item, 
+                                  records,
+                                  random_state=random_states[i], 
+                                  **kwargs)
+            
+            if qwk is not None: # only rank0 has qwk != None
+                qwks.append(qwk)
+
+        if is_main():
+            return np.array(qwks).round(4)
+        else:
+            return None
+    except KeyboardInterrupt:
+        if is_main():
+            print("\nProcessing interrupted by user (Ctrl+C). Returning None.")
         return None

@@ -14,7 +14,7 @@ pip install flash-attn --no-build-isolation
 
 ### install exllamav2
 ```
-git clone https://github.com/turboderp/exllamav2
+git clone https://github.com/turboderp-org/exllamav2
 cd exllamav2
 pip install -r requirements.txt
 pip install -e .
@@ -44,16 +44,28 @@ run `wandb login --cloud`
 - run `python preprocess_datasets.py`
 
 ### generate pairwise training dataset
-- generate predictions with weak model
-- generate pairwise dataset using predictions to estimate **hard pairs** (i.e. **hard negatives/positives**)
-1. download weak model
-2. generate predictions
+1. generate predictions with weak model
+- download weak model:
+```
+huggingface-cli download davidsvaughn/dan-bw
+```
+
+- generate predictions:
 ```
 torchrun --nproc_per_node 4 siamese_test.py \
     --item-type bw \
+    --pooling-mode mean \
     gen \
     --model-dir ~/models \
     --model-id dan-bw
+
+# bash script
+bash scripts/gen_preds.sh
+```
+
+2. generate pairwise dataset using predictions (from step 1) to estimate *hard pairs* (i.e. *hard negatives/positives*)
+```
+# command here...
 ```
 
 ### fine-tune embedding model
@@ -63,31 +75,36 @@ python siamese_train.py
 
 # multi-GPU
 torchrun --nproc_per_node 4 siamese_train.py
+
+# bash script
+bash scripts/finetune.sh
 ```
 
-### test embedding model
+### test embedding model / scan checkpoints to find optimum
 ```
-# single GPU
-python siamese_test.py \
-    --item-type math \
-    scan \
-    --model-dir output3 \
-    --items 123362,33082,13272,27218,29632,31600,52414,78382
-
-# multi-GPU
 torchrun --nproc_per_node 4 siamese_test.py \
-    --item-type math \
+    --item-type bw \
+    --pooling-mode lasttoken \
     scan \
-    --model-dir output3 \
-    --items 123362,33082,13272,27218,29632,31600,52414,78382
+    --model-dir output6 \
+    --chk-min 200 --chk-max 700 \
+    --items 33234,63166,96340,58566,95508,104462,34002,96326,63172,126288
+
+# bash script
+bash scripts/scan_chkpts.sh
 ```
 
 ### merge adapter model
 ```
-python merge_adapter.py --checkpoint_dir output/checkpoint-2400
+python merge_adapter.py --checkpoint_dir output/checkpoint-2400 --model_dir ~/models/new-model
 ```
 
 ### upload merged model
 ```
-huggingface-cli upload davidsvaughn/phi4-math-lasttoken-1 output/model --private
+huggingface-cli upload davidsvaughn/phi4-math ~/models/new-model --private
+```
+
+### exl2 quantize merged model (e.g. to 4 bit)
+```
+bash scripts/exl2_convert.sh ~/models/new-model 4 
 ```

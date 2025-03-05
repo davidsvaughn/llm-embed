@@ -7,9 +7,6 @@ import itertools
 import torch
 from glob import glob
 import shutil
-# import gzip
-# import json_tricks
-# import portalocker
 
 class adict(dict):
     def __init__(self, *av, **kav):
@@ -25,8 +22,10 @@ def to_adict(d):
         return d
 
 def mkdirs(path):
-    if not os.path.exists(path):
+    try:
         os.makedirs(path)
+    except Exception as e:
+        pass
 
 def read_json(fn):
     with open(fn, 'r') as f:

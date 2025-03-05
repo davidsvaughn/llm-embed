@@ -13,10 +13,10 @@ from model_utils import load_model, tokenize_data_batched
 from ddp_utils import is_main
 
 def _get_hf_embedding(last_hidden,
-                     attention_mask,
-                     pooling_mode="mean",
-                     padding_side="left",
-                     last_token_offset=0):
+                      attention_mask,
+                      pooling_mode="mean",
+                      padding_side="left",
+                      last_token_offset=0):
     # embedding_mask is attention_mask with the last 4 tokens zeroed out (when score included)
     last_token_index = -1 - last_token_offset
 

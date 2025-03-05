@@ -219,6 +219,29 @@ def process_raw_data(item_type, root_data_dir, items_sub='items'):
 def expand_user(path):
     return os.path.expanduser(path) if '~' in path else path
 
+def run_filter(N, filter_expr):
+    """
+    Filter a list of integers based on a Python expression.
+    
+    Args:
+        N: List of integers to filter
+        filter_expr: String containing a Python expression where 'n' represents each number
+                    Examples: "n % 2 == 0", "n > 10", "n % 3 == 0 and n % 2 == 1"
+    
+    Returns:
+        List of integers that satisfy the filter expression
+    """
+    filtered_N = []
+    for n in N:
+        try:
+            # Use a restricted globals dict for security
+            if eval(filter_expr, {"__builtins__": {}}, {"n": n}):
+                filtered_N.append(n)
+        except Exception as e:
+            print(f"Error evaluating expression for n={n}: {e}")
+            sys.exit(1)
+    return filtered_N
+
 def get_base_config(item_type,
                     data_dir='data',
                     # model_dir='models',
@@ -305,31 +328,17 @@ def get_config(item_type, trait=None, **kwargs):
     else:
         raise ValueError(f"Invalid item_type: {item_type}")
     
-    # if 'items' not in cfg:
-    #     items = []
-    #     for item_file in glob(f"{cfg.data_dir}/*/train.jsonl"):
-    #         item = int(re.search(r'(\d+)', item_file).group(1))
-    #         items.append(item)
-    #     items.sort()
-    #     cfg['items'] = items
-        
-    # filter in items
-    if 'filter_in_mult' in cfg and 'items' in cfg and cfg.filter_in_mult is not None:
-        cfg.items = [item for item in cfg.items if item % cfg.filter_in_mult == 0]
-    
-    # filter out items
-    if 'filter_out_mult' in cfg and 'items' in cfg and cfg.filter_out_mult is not None:
-        cfg.items = [item for item in cfg.items if item % cfg.filter_out_mult != 0]
+    if 'item_filter' in cfg and 'items' in cfg:
+        cfg.items = run_filter(cfg.items, cfg.item_filter)
     
     # filter items by hh_min
     if 'hh_min' in cfg and 'items' in cfg and cfg.hh_min is not None:
         cfg.items = [item for item in cfg.items if cfg.item_to_hh[item] >= cfg.hh_min]
         
     if 'item_to_hh' in cfg:
-        # filter item_to_hh by items
         cfg.item_to_hh = { item: hh for item,hh in cfg.item_to_hh.items() if item in cfg.items }
         
-    print(cfg)
+    printmain(cfg)
     
     # load tokenizer
     for id in 'model_id', 'tokenizer_id':

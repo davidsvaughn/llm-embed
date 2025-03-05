@@ -13,21 +13,30 @@
             "console": "integratedTerminal",
             "justMyCode": false,
 
+            ///// siamese_test.py : scan /////
+            "args": [
+                "--item-type", "bw",
+                "--pooling-mode", "lasttoken",
+                "scan",
+                "--model-dir", "output4",
+                "--chk-min", "350", "--chk-max", "1500",
+                // "--chk-list", "250,400,550",
+                "--items", "126288",
+            ]
+
+            ///// siamese_test.py : gen /////
             // "args": [
-            //     ///// siamese_test.py
-            //     // "scan",
-            //     // "--model-dir", "output4",
-            //     // "--items", "85656",
-            //     // "--min-num", "400",
-            //     // "--max-num", "800",
+            //     "--item-type", "bw",
+            //     // "--pooling-mode", "lasttoken",
+            //     "--hh-min", "0.66",
             //     "gen",
             //     "--model-dir", "~/models",
-            //     "--model-id", "dan-bw",
-            //     "--items", "85656",
-            //     //// preprocess_datasets.py
-            //     // "--data-types", "bw",
-            //     // "--data-dir", "data",
+            //     // "--model-id", "phi4-bw-1",
+            //     // "--model-id", "dan-bw",
+            //     "--model-id", "dan-bw-exl2-q4",
+            //     "--item-filter", "n % 2 != 0",
             // ]
+            
         }
 
         //-----------------------------------

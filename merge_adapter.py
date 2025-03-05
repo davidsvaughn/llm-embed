@@ -15,10 +15,7 @@ from utils import adict, read_json
 class ScriptArguments:
     checkpoint_dir: str = field(metadata={"help": "path to checkpoint"})
     output_dir: Optional[str] = field(default="model", metadata={"help": "where the merged model should be saved"})
-    # save_tokenizer: Optional[bool] = field(default=True, metadata={"help": "whether to save the tokenizer"})
-    # peft_model_id: str = field(metadata={"help": "model id or path to model"})
-    # push_to_hub: Optional[bool] = field(default=False, metadata={"help": "whether to push the model to the hub"})
-    # repository_id: Optional[str] = field(default=None, metadata={"help": "the model name"})
+
 
 def load_peft_model(checkpoint_dir):
     config = PeftConfig.from_pretrained(checkpoint_dir)
@@ -30,7 +27,6 @@ def load_peft_model(checkpoint_dir):
         print(f"\nLoading tokenizer from {tok_dir}...")
         tokenizer = AutoTokenizer.from_pretrained(tok_dir)
     else:
-        # base_model_id = adict(read_json(os.path.join(output_dir, 'config.json')))._name_or_path
         base_model_id = config.base_model_name_or_path
         print(f"\nLoading tokenizer from {base_model_id}...")
         tokenizer = AutoTokenizer.from_pretrained(base_model_id)
@@ -65,8 +61,12 @@ def main():
 
     # get output directory name
     parent_dir = os.path.dirname(args.checkpoint_dir)
-    output_dir = os.path.join(parent_dir, args.output_dir)
-
+    
+    # if output_dir begins with ~ then expanduser
+    if args.output_dir.startswith('~'):
+        args.output_dir = os.path.expanduser(args.output_dir)
+    elif not args.output_dir.startswith('/'):
+        output_dir = os.path.join(parent_dir, args.output_dir)
 
     # load LoRA (adapter) model
     config = PeftConfig.from_pretrained(args.checkpoint_dir)
