@@ -14,15 +14,15 @@
             "justMyCode": false,
 
             ///// siamese_test.py : scan /////
-            "args": [
-                "--item-type", "bw",
-                "--pooling-mode", "lasttoken",
-                "scan",
-                "--model-dir", "output4",
-                // "--chk-min", "350", "--chk-max", "1500",
-                "--chk-list", "250,400,550",
-                "--items", "126288",
-            ]
+            // "args": [
+            //     "--item-type", "bw",
+            //     "--pooling-mode", "lasttoken",
+            //     "scan",
+            //     "--model-dir", "output4",
+            //     // "--chk-min", "350", "--chk-max", "1500",
+            //     "--chk-list", "250,400,550",
+            //     "--items", "126288",
+            // ]
 
             ///// siamese_test.py : gen /////
             // "args": [
