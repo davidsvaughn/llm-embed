@@ -19,8 +19,8 @@
                 "--pooling-mode", "lasttoken",
                 "scan",
                 "--model-dir", "output4",
-                "--chk-min", "350", "--chk-max", "1500",
-                // "--chk-list", "250,400,550",
+                // "--chk-min", "350", "--chk-max", "1500",
+                "--chk-list", "250,400,550",
                 "--items", "126288",
             ]
 
@@ -36,7 +36,7 @@
             //     "--model-id", "dan-bw-exl2-q4",
             //     "--item-filter", "n % 2 != 0",
             // ]
-            
+
         }
 
         //-----------------------------------

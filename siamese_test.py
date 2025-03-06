@@ -21,7 +21,8 @@ from embedder.sent_trans import SentenceTransformerEmbedder
 
 # save predictions for all items - useful for building "hard pairs" dataset for siamese model
 def generate_predictions(args):
-
+    
+    # arg adjustments
     args.items = [int(x.strip()) for x in args.items.split(",")] if args.items else None
     args.hh_min = args.hh_min if not args.items else None
     args.item_filter = args.item_filter if not args.items else None
@@ -73,26 +74,7 @@ def generate_predictions(args):
 # output_dir contains multiple checkpoint directories
 def scan_checkpoints(args):
     
-    #------------------------------------------------------------------------------
-    # # old code
-    # args.chk_list = args.chk_list.split(",") if args.chk_list else None
-    # pooling_mode = args.pooling_mode
-    # K = args.K
-    # items = [int(it.strip()) for it in args.items.split(",")] if args.items else None
-    
-    # cfg = get_config(args.item_type,
-    #                  random_state=args.random_state,
-    #                  data_dir=args.data_dir,
-    #                  prompt_dir=args.prompt_dir,
-    #                  model_dir=args.model_dir,
-    #                  items=items,
-    #                  hh_min=args.hh_min if not args.items else None,
-    #                  filter_in_mult=args.filter_in_mult if not args.items else None,
-    #                  item_filter=args.item_filter if not args.items else None,
-    #                  )
-    #------------------------------------------------------------------------------
-    # new code
-    
+    # arg adjustments
     args.items = [int(x.strip()) for x in args.items.split(",")] if args.items else None
     args.hh_min = args.hh_min if not args.items else None
     args.item_filter = args.item_filter if not args.items else None
@@ -204,10 +186,10 @@ def scan_checkpoints(args):
             # Broadcast Q from rank 0 to all other ranks
             torch.distributed.broadcast(Q, src=0)
             
-            # Convert back to numpy
-            if device.type == 'cuda':
+            # Convert back to cpu/numpy
+            try:
                 Q = Q.cpu().numpy()
-            else:
+            except:
                 Q = Q.numpy()
             
             # Wait for all processes to finish

@@ -227,13 +227,17 @@ def get_pairs(hf_cfg, dataset_cfg, debug=False):
     return train_data, valid_data
 
 #---------------------------------------------------------------------------------------------
+# cp /mnt/llm-train/embed/tmp/math_preds.tar.gz data/math/items
+# tar -xvf data/math/items/math_preds.tar.gz -C data/math/items
+# tar -xvzf math_preds.tar.gz
+
 
 def make_hf_dataset():
     
     # general parameters for building the dataset
     hf_cfg = to_adict({
         
-        'FILTER_OUT_MULT': 2,
+        'ITEM_FILTER': "n%2!=0", # odd items only
         'CT_MAX_TRAIN': 3,
         'CT_MAX_VALID': 1,
         'NP_MIN_TRAIN': 2,
@@ -254,56 +258,61 @@ def make_hf_dataset():
     random.seed(hf_cfg.RAND_SEED)
     np.random.seed(hf_cfg.RAND_SEED)
     
-    root_data_dir = '~/embed/data'
-    root_prompt_dir = 'prompts'
+    data_dir = '~/embed/data'
+    prompt_dir = 'prompts'
 
     #---------------------------------------------------------------------------------------------
     dataset_cfgs = []
     #-------------------------------------------------------
     # cfg = get_config('math',
-    #                  data_dir=root_data_dir,
-    #                  prompt_dir=root_prompt_dir,
+    #                  data_dir=data_dir,
+    #                  prompt_dir=prompt_dir,
     #                  hh_min=0.64,
-    #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+    #                  item_filter=hf_cfg.ITEM_FILTER,
     #                  model_id='dan-siam-3', # for predictions
     #                  )
     # dataset_cfgs.append(cfg)
+    
     #-------------------------------------------------------
     cfg = get_config('bw',
-                     data_dir=root_data_dir,
-                     prompt_dir=root_prompt_dir,
+                     data_dir=data_dir,
+                     prompt_dir=prompt_dir,
                      hh_min=0.54,
-                     filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+                     item_filter=hf_cfg.ITEM_FILTER,
                      model_id='dan-bw',
                      )
     dataset_cfgs.append(cfg)
+    
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  data_dir=root_data_dir,
-    #                  prompt_dir=root_prompt_dir,
+    #                  data_dir=data_dir,
+    #                  prompt_dir=prompt_dir,
     #                  trait='con', hh_min=0.6,
-    #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+    #                  item_filter=hf_cfg.ITEM_FILTER,
     #                  model_id='dan-bw',
     #                  )
     # dataset_cfgs.append(cfg)
+    
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  data_dir=root_data_dir,
-    #                  prompt_dir=root_prompt_dir,
+    #                  data_dir=data_dir,
+    #                  prompt_dir=prompt_dir,
     #                  trait='org', # hh_min=0.75,
-    #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+    #                  item_filter=hf_cfg.ITEM_FILTER,
     #                  model_id='dan-bw',
     #                  )
     # dataset_cfgs.append(cfg)
+    
     # #-------------------------------------------------------
     # cfg = get_config('fw',
-    #                  data_dir=root_data_dir,
-    #                  prompt_dir=root_prompt_dir,
+    #                  data_dir=data_dir,
+    #                  prompt_dir=prompt_dir,
     #                  trait='dev', # hh_min=0.75,
-    #                  filter_out_mult=hf_cfg.FILTER_OUT_MULT,
+    #                  item_filter=hf_cfg.ITEM_FILTER,
     #                  model_id='dan-bw',
     #                  )
     # dataset_cfgs.append(cfg)
+    
     #---------------------------------------------------------------------------------------------
     
     train_data, valid_data = [], []

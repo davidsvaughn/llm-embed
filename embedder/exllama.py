@@ -223,19 +223,6 @@ class ExLlamaV2Embedder(Embedder):
     def __init__(self, max_seq_len=8192, batch_size=16, **cfg):
         super().__init__(to_adict(cfg))
         
-        
-        #------------------------------------------------------------------------------
-        # ## old code
-        # parser = argparse.ArgumentParser(description = "Test inference on ExLlamaV2 model")
-        # parser.add_argument("-er", "--eval_rows", type = int, default = 128, help = "Number of rows to apply from dataset")
-        # parser.add_argument("-el", "--eval_length", type = int, default = 4096, help = "Max no. tokens per sample")
-        # parser.add_argument("-pnb", "--prompt_no_bos", action = "store_true", help = "Don't add BOS token to prompt")
-        # parser.add_argument("-t", "--tokens", type = int, default = 128, help = "Max no. tokens")
-        # parser.add_argument("-nwu", "--no_warmup", action = "store_true", help = "Skip warmup before testing model")
-        # model_init.add_args(parser)
-        # args = parser.parse_args()
-        #------------------------------------------------------------------------------
-        # new code
         args = argparse.Namespace()
         args.eval_rows = 128
         args.eval_length = 4096

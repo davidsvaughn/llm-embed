@@ -44,26 +44,26 @@ run `wandb login --cloud`
 - run `python preprocess_datasets.py`
 
 ### generate pairwise training dataset
-1. generate predictions with weak model
-- download weak model:
+1. download weak model:
 ```
-huggingface-cli download davidsvaughn/dan-bw
+huggingface-cli download davidsvaughn/dan-bw --local-dir ~/models/dan-bw
 ```
 
-- generate predictions:
+2. generate weak predictions:
 ```
 torchrun --nproc_per_node 4 siamese_test.py \
     --item-type bw \
     --pooling-mode mean \
     gen \
     --model-dir ~/models \
-    --model-id dan-bw
+    --model-id dan-bw \
+    --item-filter n%2!=0 # odd item numbers only
 
-# bash script
+# or use bash script
 bash scripts/gen_preds.sh
 ```
 
-2. generate pairwise dataset using predictions (from step 1) to estimate *hard pairs* (i.e. *hard negatives/positives*)
+3. generate pairwise dataset using predictions (from step 2) to estimate *hard pairs* (i.e. *hard negatives/positives*)
 ```
 # command here...
 ```
@@ -76,7 +76,7 @@ python siamese_train.py
 # multi-GPU
 torchrun --nproc_per_node 4 siamese_train.py
 
-# bash script
+# or bash script
 bash scripts/finetune.sh
 ```
 
@@ -87,10 +87,10 @@ torchrun --nproc_per_node 4 siamese_test.py \
     --pooling-mode lasttoken \
     scan \
     --model-dir output6 \
-    --chk-min 200 --chk-max 700 \
+    --chk-min 200 --chk-max 1500 \
     --items 33234,63166,96340,58566,95508,104462,34002,96326,63172,126288
 
-# bash script
+# or bash script
 bash scripts/scan_chkpts.sh
 ```
 
