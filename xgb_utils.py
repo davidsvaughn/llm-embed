@@ -5,6 +5,7 @@ import time
 from sklearn.model_selection import KFold, cross_val_predict
 from kappa import ikappa
 from ddp_utils import is_main
+from utils import clear_cuda_tensors
 
 
 def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, random_state=42, **kwargs):
@@ -37,6 +38,9 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
     
     # Compute embeddings just for this item
     emb_data = embedder.compute_embeddings({item: records}, **kwargs)
+    
+    # Clear cuda memory
+    clear_cuda_tensors()
     
     if is_main():
         # Run XGBoost for this item
@@ -101,7 +105,8 @@ def run_xgb_on_item(embedder, item, records, preds_file=None, K=5, step=None, ra
     else:
         qwk = None
 
-    if torch.distributed.is_initialized(): torch.distributed.barrier(device_ids=[torch.cuda.current_device()])  # Wait for rank 0 to finish
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier(device_ids=[torch.cuda.current_device()])  # Wait for rank 0 to finish
     
     if is_main():
         if step is not None:
@@ -145,7 +150,8 @@ def run_xgb_on_items(embedder, data_by_item, **kwargs):
                                   random_state=random_states[i], 
                                   **kwargs)
             
-            if qwk is not None: # only rank0 has qwk != None
+            if qwk is not None:
+                # only rank0 has qwk != None
                 qwks.append(qwk)
 
         if is_main():

@@ -59,6 +59,11 @@ def find_cuda_tensors():
 
 def clear_cuda_tensors(target_size=None): # (1, 8192, 32, 96)
     """Clear tensors of specific size from memory"""
+    
+    # check if cuda is being used
+    if not torch.cuda.is_available():
+        return
+    
     count = 0
     for obj in gc.get_objects():
         try:
