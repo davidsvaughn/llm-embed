@@ -4,7 +4,8 @@
 
 MODEL_ID="microsoft/Phi-4-mini-instruct" # base model to finetune
 
-DATASET_ID="davidsvaughn/bw_pairs_1693"
+# DATASET_ID="davidsvaughn/bw_pairs_1693"
+DATASET_ID="davidsvaughn/math_pairs_1426"
 
 
 #-------------------------------------------------------------------
@@ -20,5 +21,5 @@ python siamese_train.py --model_id $MODEL_ID --dataset_id $DATASET_ID --tokenize
 torchrun --nproc_per_node 4 siamese_train.py \
     --model_id $MODEL_ID \
     --dataset_id $DATASET_ID \
-    --pooling_mode lasttoken \
-    --lm_loss_weight 0.1
+    --pooling_mode mean \
+    --lm_loss_weight 0.001

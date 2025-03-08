@@ -157,7 +157,8 @@ def scan_checkpoints(args):
         if qwks is not None:
             qwk = qwks.mean()
             chkpt = checkpoint_dir.split('/')[-1]
-            result = f'{chkpt}\t{qwk:.4f}\t{qwks.round(4)}'
+            qwks = '\t'.join([f'{q:.4f}' for q in qwks])
+            result = f'{chkpt}\t{qwk:.4f}\t\t{qwks}'
             results.append(result)
             
             # sort results by checkpoint number

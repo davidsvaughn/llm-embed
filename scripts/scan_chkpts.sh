@@ -2,16 +2,16 @@
 
 # Scan saved checkpoints after finetuning
 
-ITEM_TYPE="bw"
+ITEM_TYPE="math"
 # ITEMS="33234,63166,96340,58566,95508,104462,34002,96326,63172,126288"
 # ITEMS="104462,126288"
 
 ITEM_FILTER="n%4==0"
 
 # MODEL_DIR="output6"; CHK_MIN=200; CHK_MAX=700
-MODEL_DIR="output8"; CHK_MIN=50; CHK_MAX=4200
+MODEL_DIR="output9"; CHK_MIN=100; CHK_MAX=7100
 
-POOLING_MODE="lasttoken" # default is "mean"
+POOLING_MODE="mean" # default is "mean"
 
 #-------------------------------------------------------------------
 # change to the project root directory (parent of scripts directory)
